@@ -21,5 +21,5 @@ if (-not $NoShortcut) {
 }
 
 Write-Host ""
-Write-Host "Installed Vibemode Overlay."
+Write-Host "Installed NeuroGate API."
 Write-Host "Run: .\scripts\run-overlay.ps1"

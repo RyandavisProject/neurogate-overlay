@@ -1,6 +1,6 @@
-# Privacy
+﻿# Privacy
 
-Vibemode Overlay is designed to be local-first.
+NeuroGate API is designed to be local-first.
 
 ## What The App Reads
 
@@ -20,7 +20,7 @@ It parses the values needed for the desktop overlay:
 
 The browser is hidden by default after login. If the saved browser session is
 expired, the app opens a visible Chrome window so the user can log in directly
-on the Vibemode/Neurogate website. After a successful read, that visible window
+on the NeuroGate website. After a successful read, that visible window
 is closed and later updates continue in hidden mode.
 
 The user can temporarily keep the account page visible with the `Не закрывать ЛК`
@@ -66,3 +66,4 @@ These files are for the user's own machine only and must not be published.
 
 When sharing screenshots, bug reports, or GitHub issues, remove account names,
 request IDs, usage numbers, and any browser/session files.
+

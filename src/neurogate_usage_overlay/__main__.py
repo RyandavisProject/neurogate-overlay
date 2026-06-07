@@ -9,7 +9,7 @@ from .overlay import UsageOverlay
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Vibemode/Neurogate API usage overlay.")
+    parser = argparse.ArgumentParser(description="NeuroGate API usage overlay.")
     parser.add_argument("--url", default=USAGE_URL, help="Usage page URL.")
     parser.add_argument("--interval", type=int, default=60, help="Refresh interval in seconds.")
     parser.add_argument(

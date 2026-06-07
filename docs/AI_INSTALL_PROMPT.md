@@ -1,21 +1,21 @@
-# AI Install Prompt
+﻿# AI Install Prompt
 
 Use this prompt with Codex, Claude Code, or another local coding agent that can
 run terminal commands on your Windows machine.
 
 ```text
-You are installing Vibemode Overlay from:
+You are installing NeuroGate API from:
 
-https://github.com/RyandavisProject/vibemode-overlay
+https://github.com/RyandavisProject/neurogate-api
 
 Goal:
 Install the local Windows overlay, create a desktop shortcut, launch it, and
 give the user a short plain-language installation report.
 
 Rules:
-- Do not ask the user for Vibemode, Neurogate, API, or portal passwords.
+- Do not ask the user for NeuroGate API or portal passwords.
 - Do not collect, print, or store credentials.
-- The user must log in directly on the Vibemode/Neurogate website if Chrome
+- The user must log in directly on the NeuroGate website if Chrome
   opens a login page.
 - After login succeeds, the visible Chrome window should close automatically
   and future overlay updates should continue in hidden mode.
@@ -26,8 +26,8 @@ Rules:
 
 Steps:
 1. If the repository is not already cloned locally, clone it:
-   git clone https://github.com/RyandavisProject/vibemode-overlay.git
-   cd vibemode-overlay
+   git clone https://github.com/RyandavisProject/neurogate-api.git
+   cd neurogate-api
 2. Inspect the repository root and confirm these files exist:
    - README.md
    - pyproject.toml
@@ -43,7 +43,7 @@ Steps:
    powershell -ExecutionPolicy Bypass -File .\scripts\create-desktop-shortcut.ps1
 6. Launch the overlay:
    powershell -ExecutionPolicy Bypass -File .\scripts\run-overlay.ps1
-7. If Chrome opens a Vibemode/Neurogate login page, tell the user:
+7. If Chrome opens a NeuroGate login page, tell the user:
    "Please log in in this Chrome window. The app does not receive your password.
    After login, the visible browser will close and updates will continue hidden."
 8. After launch, report:
@@ -54,8 +54,9 @@ Steps:
    - whether checks passed.
 
 Expected short report style:
-"Installed Vibemode Overlay. I created a local .venv, installed the package,
+"Installed NeuroGate API. I created a local .venv, installed the package,
 created the desktop shortcut, ran checks, and launched the overlay. The app does
-not collect passwords or API keys; login happens only on the Vibemode/Neurogate
+not collect passwords or API keys; login happens only on the NeuroGate
 website in the local Chrome profile."
 ```
+

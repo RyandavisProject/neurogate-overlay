@@ -1,6 +1,6 @@
-# Architecture
+﻿# Architecture
 
-Vibemode Overlay is intentionally small and local-first. It has four main
+NeuroGate API is intentionally small and local-first. It has four main
 runtime layers.
 
 ## Runtime Flow
@@ -12,7 +12,7 @@ run-overlay.ps1
       -> Playwright persistent Chrome profile
       -> hidden browser by default
       -> visible browser only when login is required
-      -> Vibemode/Neurogate usage page
+      -> NeuroGate usage page
       -> visible body text
     -> parse_usage_text()
       -> UsageSnapshot / UsageWindow
@@ -64,6 +64,8 @@ run-overlay.ps1
 - estimates how many credits can still be spent before the current tariff
   expires;
 - combines the 5-hour pacing limit with the 7-day aggregate limit;
+- adds future 7-day capacity only for full 7-day periods before the current
+  tariff expires;
 - returns the lower value because both limits apply at the same time.
 
 ### Overlay UI
@@ -114,3 +116,4 @@ adding:
 - AI-agent installation instructions;
 - GitHub Actions CI;
 - publishing checklist and security guidance.
+

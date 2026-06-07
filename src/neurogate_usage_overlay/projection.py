@@ -65,6 +65,22 @@ def projected_window_capacity(
     return current_remaining + future_resets * window_limit
 
 
+def projected_period_capacity(
+    current_remaining: int | None,
+    plan_remaining_text: str | None,
+    window_limit: int,
+    period: timedelta,
+) -> int | None:
+    if current_remaining is None:
+        return None
+    plan_remaining = parse_plan_remaining(plan_remaining_text)
+    if not plan_remaining or plan_remaining <= timedelta(0):
+        return current_remaining
+
+    full_future_periods = math.floor(plan_remaining / period)
+    return current_remaining + full_future_periods * window_limit
+
+
 def projected_spendable_credits(snapshot: UsageSnapshot) -> int | None:
     five_hour = find_window(snapshot, "5")
     seven_day = find_window(snapshot, "7")
@@ -78,9 +94,8 @@ def projected_spendable_credits(snapshot: UsageSnapshot) -> int | None:
         FIVE_HOUR_CREDIT_LIMIT,
         timedelta(hours=5),
     )
-    seven_day_capacity = projected_window_capacity(
+    seven_day_capacity = projected_period_capacity(
         seven_day.credits_remaining,
-        seven_day.reset_text,
         snapshot.plan_status,
         SEVEN_DAY_CREDIT_LIMIT,
         timedelta(days=7),

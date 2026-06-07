@@ -1,6 +1,6 @@
-# Security
+﻿# Security
 
-This project must not collect, request, store or transmit Vibemode/Neurogate
+This project must not collect, request, store or transmit NeuroGate
 passwords, API keys, cookies, or browser profile folders.
 
 ## Login model
@@ -46,3 +46,4 @@ them as private local data.
 
 Open a private security advisory in the GitHub repository or contact the
 repository owner. Do not paste credentials into issues.
+

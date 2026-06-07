@@ -1,4 +1,4 @@
-# Publishing To GitHub
+﻿# Publishing To GitHub
 
 Use this checklist before sharing the overlay publicly.
 
@@ -37,7 +37,7 @@ Confirm these files are current:
 ```powershell
 git init
 git add .
-git commit -m "Prepare Vibemode overlay for public release"
+git commit -m "Prepare NeuroGate API for public release"
 ```
 
 ## 5. Push To GitHub
@@ -45,7 +45,7 @@ git commit -m "Prepare Vibemode overlay for public release"
 Create a new GitHub repository, then:
 
 ```powershell
-git remote add origin https://github.com/RyandavisProject/vibemode-overlay.git
+git remote add origin https://github.com/RyandavisProject/neurogate-api.git
 git branch -M main
 git push -u origin main
 ```
@@ -57,8 +57,8 @@ Tell users:
 1. Install Python and Chrome.
 2. Download/clone the repository.
 3. Run `scripts\install.bat`.
-4. Use the created `Vibemode Overlay` desktop shortcut.
-5. Log in directly on the Vibemode/Neurogate website when Chrome opens.
+4. Use the created `NeuroGate API` desktop shortcut.
+5. Log in directly on the NeuroGate website when Chrome opens.
 
 Never ask users to send you their password.
 
@@ -73,6 +73,7 @@ docs/AI_INSTALL_PROMPT.md
 Suggested user command:
 
 ```text
-Install Vibemode Overlay from this repository. Read docs/AI_INSTALL_PROMPT.md
+Install NeuroGate API from this repository. Read docs/AI_INSTALL_PROMPT.md
 and follow it exactly.
 ```
+

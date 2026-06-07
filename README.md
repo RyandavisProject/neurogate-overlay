@@ -147,7 +147,7 @@ docs/AI_INSTALL_PROMPT.md
 ## Project Structure
 
 ```text
-neurogate-usage-overlay/
+vibemode-overlay/
   src/neurogate_usage_overlay/
     __main__.py          CLI entrypoint
     browser_reader.py    Playwright browser/session reader

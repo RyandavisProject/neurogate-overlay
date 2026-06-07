@@ -45,7 +45,7 @@ git commit -m "Prepare Vibemode overlay for public release"
 Create a new GitHub repository, then:
 
 ```powershell
-git remote add origin https://github.com/YOUR-ORG/neurogate-usage-overlay.git
+git remote add origin https://github.com/RyandavisProject/vibemode-overlay.git
 git branch -M main
 git push -u origin main
 ```

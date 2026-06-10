@@ -13,15 +13,16 @@ The main documentation is in Russian because the primary users are Russian-speak
 
 ## Скриншоты
 
-![NeuroGate Overlay](docs/screenshots/overlay.png)
-
-Подсказка расхода:
-
-![NeuroGate Overlay Tooltip](docs/screenshots/overlay-tooltip.png)
-
-Меню настроек:
-
-![NeuroGate Overlay Menu](docs/screenshots/overlay-menu.png)
+<table>
+  <tr>
+    <td><img src="docs/screenshots/overlay-tooltip.png" alt="Подсказка расхода" /></td>
+    <td><img src="docs/screenshots/overlay-menu.png" alt="Меню настроек" /></td>
+  </tr>
+  <tr>
+    <td align="center">Подсказка расхода</td>
+    <td align="center">Меню настроек</td>
+  </tr>
+</table>
 
 ## Что показывает оверлей
 
@@ -314,7 +315,6 @@ neurogate-overlay/
     PRIVACY.md
     PUBLISHING.md
     screenshots/
-      overlay.png
       overlay-tooltip.png
       overlay-menu.png
   tests/

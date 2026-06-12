@@ -74,6 +74,8 @@ class UsageOverlay:
     SCALE_LARGE = 2
     MIN_REFRESH_SECONDS = 60
     LOGIN_POLL_SECONDS = 2
+    TRANSIENT_FAILURE_CONFIRMATIONS = 3
+    TRANSIENT_FAILURE_GRACE_SECONDS = 30
     UPDATE_CHECK_SECONDS = 24 * 60 * 60
     INTERVAL_CHOICES_MINUTES = (1, 3, 5, 10, 15, 60)
     UI_FONT = "Segoe UI Variable Small"
@@ -102,6 +104,9 @@ class UsageOverlay:
         self.after_id: str | None = None
         self.last_refresh_at: datetime | None = None
         self.last_snapshot: UsageSnapshot | None = None
+        self.transient_failure_since: datetime | None = None
+        self.transient_failure_count = 0
+        self.transient_status_note: str | None = None
         self.update_info: UpdateInfo | None = None
         self.update_check_running = False
         self.status_text = "обновление"
@@ -111,7 +116,7 @@ class UsageOverlay:
         self.tooltip_window: tk.Toplevel | None = None
 
         self.root = tk.Tk()
-        self.root.title("NeuroGate API 1.5.1")
+        self.root.title("NeuroGate API 1.5.2")
         self.root.geometry(self._initial_geometry())
         self.root.overrideredirect(True)
         self.root.attributes("-topmost", True)
@@ -491,6 +496,7 @@ class UsageOverlay:
         except Exception as exc:  # noqa: BLE001 - show reset errors without crashing the overlay.
             self._apply_error(exc)
             return
+        self._clear_transient_failure()
         self.last_snapshot = UsageSnapshot(updated_at=datetime.now().astimezone(), status_note="нужен вход")
         self.status_text = "нужен вход"
         self._schedule_next_refresh()
@@ -572,9 +578,47 @@ class UsageOverlay:
         if self.after_id:
             self.root.after_cancel(self.after_id)
         delay_ms = self.interval_minutes * 60 * 1000
-        if self.last_snapshot and not self.last_snapshot.has_data:
+        if self._has_pending_transient_failure() or (self.last_snapshot and not self.last_snapshot.has_data):
             delay_ms = self.LOGIN_POLL_SECONDS * 1000
         self.after_id = self.root.after(delay_ms, self.refresh)
+
+    def _has_displayable_data(self) -> bool:
+        return bool(self.last_snapshot and self.last_snapshot.has_data)
+
+    def _has_pending_transient_failure(self) -> bool:
+        return self._has_displayable_data() and getattr(self, "transient_failure_count", 0) > 0
+
+    def _stable_status_text(self) -> str:
+        if self.last_snapshot and self.last_snapshot.has_data:
+            return f"обн. {self.last_snapshot.updated_at.strftime('%H:%M')}"
+        return self.status_text
+
+    def _clear_transient_failure(self) -> None:
+        self.transient_failure_since = None
+        self.transient_failure_count = 0
+        self.transient_status_note = None
+
+    def _hold_transient_failure(self, status_note: str | None, now: datetime) -> bool:
+        if not self._has_displayable_data():
+            return False
+        if getattr(self, "transient_failure_since", None) is None:
+            self.transient_failure_since = now
+            self.transient_failure_count = 0
+        self.transient_failure_count += 1
+        self.transient_status_note = status_note or "нет данных"
+        elapsed = now - self.transient_failure_since
+        should_confirm = (
+            self.transient_failure_count >= self.TRANSIENT_FAILURE_CONFIRMATIONS
+            and elapsed >= timedelta(seconds=self.TRANSIENT_FAILURE_GRACE_SECONDS)
+        )
+        if should_confirm:
+            return False
+        self.status_text = self._stable_status_text()
+        self._write_ui_log(
+            f"transient_failure_held count={self.transient_failure_count} "
+            f"status={self.transient_status_note!r}"
+        )
+        return True
 
     def _rounded_rect(
         self,
@@ -800,9 +844,15 @@ class UsageOverlay:
         self._draw_limit_row(47, "7д", self._window_by_index(1))
 
     def _apply_snapshot(self, snapshot: UsageSnapshot) -> None:
+        now = datetime.now().astimezone()
+        if not snapshot.has_data and self._hold_transient_failure(snapshot.status_note, now):
+            self._render()
+            return
+
         self.last_snapshot = snapshot
-        self.last_refresh_at = datetime.now().astimezone()
+        self.last_refresh_at = now
         if snapshot.has_data:
+            self._clear_transient_failure()
             self.daily_usage.record_snapshot(snapshot, self.last_refresh_at)
         if snapshot.status_note:
             self.status_text = snapshot.status_note
@@ -817,6 +867,10 @@ class UsageOverlay:
         self._render()
 
     def _apply_error(self, error: object) -> None:
+        if self._hold_transient_failure("ошибка", datetime.now().astimezone()):
+            self._render()
+            self._write_ui_log(f"transient_error_held {error!r}")
+            return
         self.status_text = "ошибка"
         self._write_ui_log(f"error {error!r}")
         self._render()
@@ -834,10 +888,11 @@ class UsageOverlay:
         now = datetime.now().astimezone()
         if self.refreshing:
             return
-        has_fresh_data = bool(self.last_snapshot and self.last_snapshot.has_data)
+        has_fresh_data = self._has_displayable_data()
         if (
             not force
             and has_fresh_data
+            and not self._has_pending_transient_failure()
             and self.last_refresh_at
             and now - self.last_refresh_at < timedelta(seconds=self.MIN_REFRESH_SECONDS)
         ):
@@ -847,8 +902,9 @@ class UsageOverlay:
             return
 
         self.refreshing = True
-        self.status_text = "обновляю"
-        self._render()
+        if not has_fresh_data:
+            self.status_text = "обновляю"
+            self._render()
         self.root.update_idletasks()
         try:
             self._apply_snapshot(self.reader())

@@ -1,6 +1,6 @@
 import unittest
 import tempfile
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from unittest.mock import patch
 
@@ -20,6 +20,9 @@ class FakeRoot:
 
     def after_cancel(self, after_id: str) -> None:
         self.cancelled.append(after_id)
+
+    def update_idletasks(self) -> None:
+        pass
 
 
 class OverlayScheduleTest(unittest.TestCase):
@@ -44,6 +47,7 @@ class OverlayScheduleTest(unittest.TestCase):
         overlay.root = FakeRoot()
         overlay.after_id = None
         overlay.interval_minutes = 3
+        overlay.transient_failure_count = 0
         overlay.last_snapshot = UsageSnapshot(
             updated_at=datetime.now(),
             windows=[UsageWindow(title="5 часов", credits_remaining=10)],
@@ -52,6 +56,21 @@ class OverlayScheduleTest(unittest.TestCase):
         overlay._schedule_next_refresh()
 
         self.assertEqual(overlay.root.after_calls, [3 * 60 * 1000])
+
+    def test_pending_transient_failure_polls_quickly_while_showing_old_data(self):
+        overlay = UsageOverlay.__new__(UsageOverlay)
+        overlay.root = FakeRoot()
+        overlay.after_id = None
+        overlay.interval_minutes = 10
+        overlay.transient_failure_count = 1
+        overlay.last_snapshot = UsageSnapshot(
+            updated_at=datetime.now(),
+            windows=[UsageWindow(title="5 часов", credits_remaining=10)],
+        )
+
+        overlay._schedule_next_refresh()
+
+        self.assertEqual(overlay.root.after_calls, [UsageOverlay.LOGIN_POLL_SECONDS * 1000])
 
     def test_interval_is_saved_in_overlay_state(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -234,6 +253,90 @@ class OverlayRenderTest(unittest.TestCase):
             )
         finally:
             overlay.close()
+
+
+class OverlayTransientStatusTest(unittest.TestCase):
+    def test_no_data_keeps_last_successful_snapshot_during_grace(self):
+        overlay = UsageOverlay.__new__(UsageOverlay)
+        good_snapshot = UsageSnapshot(
+            updated_at=datetime(2026, 6, 12, 15, 20),
+            windows=[UsageWindow(title="5 часов", credits_remaining=119_000_000)],
+        )
+        no_data_snapshot = UsageSnapshot(updated_at=datetime.now(), status_note="нужен вход")
+        renders = []
+        overlay.last_snapshot = good_snapshot
+        overlay.last_refresh_at = good_snapshot.updated_at
+        overlay.status_text = "обн. 15:20"
+        overlay.transient_failure_since = None
+        overlay.transient_failure_count = 0
+        overlay.transient_status_note = None
+        overlay._render = lambda: renders.append(overlay.status_text)
+        overlay._write_ui_log = lambda _message: None
+
+        overlay._apply_snapshot(no_data_snapshot)
+
+        self.assertIs(overlay.last_snapshot, good_snapshot)
+        self.assertEqual(overlay.status_text, "обн. 15:20")
+        self.assertEqual(overlay.transient_failure_count, 1)
+        self.assertEqual(overlay.transient_status_note, "нужен вход")
+        self.assertEqual(renders, ["обн. 15:20"])
+
+    def test_no_data_after_grace_confirms_login_state(self):
+        overlay = UsageOverlay.__new__(UsageOverlay)
+        good_snapshot = UsageSnapshot(
+            updated_at=datetime(2026, 6, 12, 15, 20),
+            windows=[UsageWindow(title="5 часов", credits_remaining=119_000_000)],
+        )
+        no_data_snapshot = UsageSnapshot(updated_at=datetime.now(), status_note="нужен вход")
+        renders = []
+        overlay.last_snapshot = good_snapshot
+        overlay.last_refresh_at = good_snapshot.updated_at
+        overlay.status_text = "обн. 15:20"
+        overlay.transient_failure_since = datetime.now().astimezone() - timedelta(
+            seconds=UsageOverlay.TRANSIENT_FAILURE_GRACE_SECONDS + 1
+        )
+        overlay.transient_failure_count = UsageOverlay.TRANSIENT_FAILURE_CONFIRMATIONS - 1
+        overlay.transient_status_note = "нужен вход"
+        overlay._render = lambda: renders.append(overlay.status_text)
+        overlay._write_ui_log = lambda _message: None
+
+        overlay._apply_snapshot(no_data_snapshot)
+
+        self.assertIs(overlay.last_snapshot, no_data_snapshot)
+        self.assertEqual(overlay.status_text, "нужен вход")
+        self.assertEqual(renders, ["нужен вход"])
+
+    def test_refresh_with_existing_data_does_not_render_updating_status(self):
+        overlay = UsageOverlay.__new__(UsageOverlay)
+        old_snapshot = UsageSnapshot(
+            updated_at=datetime(2026, 6, 12, 15, 20),
+            windows=[UsageWindow(title="5 часов", credits_remaining=119_000_000)],
+        )
+        new_snapshot = UsageSnapshot(
+            updated_at=datetime(2026, 6, 12, 15, 25),
+            windows=[UsageWindow(title="5 часов", credits_remaining=118_900_000)],
+        )
+        renders = []
+        overlay.reader = lambda: new_snapshot
+        overlay.root = FakeRoot()
+        overlay.after_id = None
+        overlay.interval_minutes = 1
+        overlay.refreshing = False
+        overlay.last_snapshot = old_snapshot
+        overlay.last_refresh_at = datetime.now().astimezone() - timedelta(minutes=2)
+        overlay.status_text = "обн. 15:20"
+        overlay.transient_failure_since = None
+        overlay.transient_failure_count = 0
+        overlay.transient_status_note = None
+        overlay.daily_usage = type("DailyUsage", (), {"record_snapshot": lambda *_args: None})()
+        overlay._render = lambda: renders.append(overlay.status_text)
+        overlay._write_ui_log = lambda _message: None
+
+        overlay.refresh()
+
+        self.assertNotIn("обновляю", renders)
+        self.assertEqual(overlay.last_snapshot, new_snapshot)
+        self.assertEqual(renders, ["обн. 15:25"])
 
 
 class OverlayAccountTest(unittest.TestCase):

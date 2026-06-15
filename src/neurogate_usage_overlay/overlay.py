@@ -87,7 +87,6 @@ class UsageOverlay:
     WIDTH = 222
     HEIGHT = 70
     DAILY_LIMIT_HEIGHT = 92
-    DAILY_LIMIT_TTL = timedelta(hours=24)
     SCALE_NORMAL = 1
     SCALE_LARGE = 2
     MIN_REFRESH_SECONDS = 60
@@ -143,7 +142,7 @@ class UsageOverlay:
         self.position_after_id: str | None = None
 
         self.root = tk.Tk()
-        self.root.title("NeuroGate API 1.7.0")
+        self.root.title("NeuroGate API 1.7.1")
         self.root.geometry(self._initial_geometry())
         self.root.overrideredirect(True)
         self.root.attributes("-topmost", True)
@@ -295,9 +294,13 @@ class UsageOverlay:
 
     def _daily_limit_expired(self) -> bool:
         set_at = getattr(self, "daily_limit_set_at", None)
-        if not getattr(self, "daily_limit_credits", None) or not set_at:
+        if not getattr(self, "daily_limit_credits", None):
             return False
-        return datetime.now().astimezone() - set_at >= self.DAILY_LIMIT_TTL
+        if not set_at:
+            return True
+        now = datetime.now().astimezone()
+        set_at_local = set_at.astimezone(now.tzinfo) if set_at.tzinfo else set_at.replace(tzinfo=now.tzinfo)
+        return set_at_local.date() != now.date()
 
     def _expire_daily_limit_if_needed(self) -> bool:
         if not self._daily_limit_expired():
@@ -355,8 +358,6 @@ class UsageOverlay:
                 False,
             ),
             ("", None, False),
-            ("Сменить аккаунт", self._reset_account if self.account_resetter else None, False),
-            ("", None, False),
             (
                 keep_browser_label,
                 self._toggle_keep_browser_open if self._has_keep_browser_toggle() else None,
@@ -388,6 +389,7 @@ class UsageOverlay:
         rows.extend(
             [
                 ("", None, False),
+                ("Сменить аккаунт", self._reset_account if self.account_resetter else None, False),
                 ("Закрыть", self.close, False),
             ]
         )
@@ -877,15 +879,7 @@ class UsageOverlay:
         if not window or window.credits_remaining is None:
             return None
         days = self._remaining_plan_days(window.reset_text) or self._remaining_plan_days(self.last_snapshot.plan_status) or 1
-        today_spent = 0
-        daily_usage = getattr(self, "daily_usage", None)
-        if daily_usage:
-            try:
-                spent = daily_usage.today_spent_7d(self.last_snapshot)
-                today_spent = spent.amount if spent is not None else 0
-            except Exception as exc:  # noqa: BLE001 - a missing history estimate should not block the dialog.
-                self._write_ui_log(f"default_daily_limit_today_spent_error {exc!r}")
-        return max(1, round((window.credits_remaining + today_spent) / days))
+        return max(1, round(window.credits_remaining / days))
 
     def _schedule_next_refresh(self) -> None:
         if self.after_id:

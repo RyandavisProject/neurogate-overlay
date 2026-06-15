@@ -265,6 +265,28 @@ class OverlayPositionTest(unittest.TestCase):
 
         self.assertEqual(overlay._content_height(), UsageOverlay.HEIGHT)
 
+    def test_daily_limit_expires_on_next_calendar_day_even_before_24_hours(self):
+        fixed_now = datetime(2026, 6, 15, 9, 0).astimezone()
+
+        class FixedDatetime(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return fixed_now if tz is None else fixed_now.astimezone(tz)
+
+        overlay = UsageOverlay.__new__(UsageOverlay)
+        overlay.daily_limit_credits = 82_000_000
+        overlay.daily_limit_set_at = datetime(2026, 6, 14, 22, 0).astimezone()
+
+        with patch("neurogate_usage_overlay.overlay.datetime", FixedDatetime):
+            self.assertEqual(overlay._content_height(), UsageOverlay.HEIGHT)
+
+    def test_daily_limit_without_set_time_is_treated_as_expired(self):
+        overlay = UsageOverlay.__new__(UsageOverlay)
+        overlay.daily_limit_credits = 82_000_000
+        overlay.daily_limit_set_at = None
+
+        self.assertEqual(overlay._content_height(), UsageOverlay.HEIGHT)
+
 
 class OverlayProgressTest(unittest.TestCase):
     def test_compact_percent_formats_daily_limit_progress(self):
@@ -279,28 +301,28 @@ class OverlayProgressTest(unittest.TestCase):
         self.assertEqual(UsageOverlay._parse_credit_input("82000000"), 82_000_000)
         self.assertIsNone(UsageOverlay._parse_credit_input("нет"))
 
-    def test_plan_days_include_hours_as_decimal_part(self):
-        self.assertAlmostEqual(UsageOverlay._remaining_plan_days("активен еще 2 дня 18 часов"), 2.75)
-        self.assertAlmostEqual(UsageOverlay._remaining_plan_days("ост. 7ч"), 7 / 24)
-
-    def test_default_daily_limit_uses_seven_day_remaining_and_plan_days(self):
-        overlay = UsageOverlay.__new__(UsageOverlay)
-        overlay.last_snapshot = UsageSnapshot(
-            updated_at=datetime.now(),
-            plan_status="активен еще 28 дней 7 часов",
-            windows=[UsageWindow(title="7 дней", credits_remaining=413_100_000, reset_text="5д 8ч")],
-        )
-        today_spent = type("TodaySpend", (), {"amount": 10_900_000, "since_text": "00:00"})()
-        overlay.daily_usage = type("DailyUsage", (), {"today_spent_7d": lambda _self, _snapshot: today_spent})()
-
-        self.assertEqual(overlay._default_daily_limit_credits(), 79_500_000)
-
     def test_daily_limit_dialog_prefills_saved_limit_when_editing(self):
         overlay = UsageOverlay.__new__(UsageOverlay)
         overlay.daily_limit_credits = 80_000_000
         overlay.daily_limit_set_at = datetime.now().astimezone()
 
         self.assertEqual(overlay._daily_limit_dialog_default_credits(), 80_000_000)
+
+    def test_plan_days_include_hours_as_decimal_part(self):
+        self.assertAlmostEqual(UsageOverlay._remaining_plan_days("активен еще 2 дня 18 часов"), 2.75)
+        self.assertAlmostEqual(UsageOverlay._remaining_plan_days("ост. 4д 10ч"), 4 + 10 / 24)
+
+    def test_daily_limit_dialog_suggests_seven_day_remaining_divided_by_reset_days(self):
+        overlay = UsageOverlay.__new__(UsageOverlay)
+        overlay.daily_limit_credits = None
+        overlay.daily_limit_set_at = None
+        overlay.last_snapshot = UsageSnapshot(
+            updated_at=datetime.now(),
+            plan_status="активен еще 28 дней",
+            windows=[UsageWindow(title="7 дней", credits_remaining=345_000_000, reset_text="4д 10ч")],
+        )
+
+        self.assertEqual(overlay._daily_limit_dialog_default_credits(), 78_113_208)
 
     def test_daily_limit_hint_reports_weekly_floor_after_daily_limit(self):
         overlay = UsageOverlay.__new__(UsageOverlay)
@@ -320,6 +342,7 @@ class OverlayProgressTest(unittest.TestCase):
         snapshot = UsageSnapshot(updated_at=datetime.now(), windows=[UsageWindow(title="7 дней", credits_remaining=421_300_000)])
         overlay.last_snapshot = snapshot
         overlay.daily_limit_credits = 82_000_000
+        overlay.daily_limit_set_at = datetime.now().astimezone()
         today_spent = type("TodaySpend", (), {"amount": 10_900_000, "since_text": "00:00"})()
         overlay.daily_usage = type("DailyUsage", (), {"today_spent_7d": lambda _self, _snapshot: today_spent})()
 

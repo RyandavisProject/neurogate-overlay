@@ -5,10 +5,10 @@ Project: NeuroGate API Overlay
 Project id: neurogate-overlay
 Local path: `C:\Codex\neurogate-usage-overlay`
 GitHub: `https://github.com/RyandavisProject/neurogate-overlay`
-Current version: `1.7.2` prepared for push with audit/performance fixes.
+Current version: `1.7.2` pushed with audit/performance fixes.
 Current branch: `main`
-Latest commit: `eab2ae8 neurogate-overlay 15-06-2026 09-37 v1.7.1: daily limit rollover fixes`
-CPLS status: WARN - public project is usable; `v1.7.2` is ready for commit/push after final checks.
+Latest commit: `bf2b984 neurogate-overlay 15-06-2026 22-44 v1.7.2: audit performance hardening`
+CPLS status: PASS - public project is usable and `v1.7.2` is pushed to GitHub `main`.
 Current mode: patch-safe; preserve current compact UI unless owner explicitly asks for visual changes.
 
 ## State Summary
@@ -39,7 +39,7 @@ local to the user's machine.
 
 ## Latest Update - 15-06-2026
 
-Version `1.7.2` is prepared for commit and push to `main`.
+Version `1.7.2` was committed and pushed to `main`.
 
 Changed:
 
@@ -63,6 +63,7 @@ Changed:
 Repository state after push:
 
 - `main` is synchronized with `origin/main`.
+- `bf2b984` is on local `HEAD` and `origin/main`.
 - GitHub repository is public.
 - No GitHub Release was created by owner preference.
 - Existing `dist` artifacts currently go up to `neurogate-overlay-v1.7.0.zip`.
@@ -73,7 +74,7 @@ Repository state after push:
 Verified after push:
 
 - `git status --short --branch`: clean, `main...origin/main`.
-- `git log --oneline -3 --decorate`: `eab2ae8` is on `HEAD` and `origin/main`.
+- `git log --oneline -3 --decorate`: `bf2b984` is on `HEAD` and `origin/main`.
 - `gh repo view RyandavisProject/neurogate-overlay`: repository is public and default
   branch is `main`.
 - `powershell -ExecutionPolicy Bypass -File .\scripts\check.ps1`: PASS, `106 tests OK` after local audit/performance fixes.
@@ -135,7 +136,7 @@ Do not do without explicit owner confirmation:
 
 | Risk | Level | Mitigation |
 | --- | --- | --- |
-| `v1.7.2` final push is pending | WARN | Run checks, commit and push to `main` |
+| `v1.7.2` ZIP artifact is not present in `dist` | WARN | Build package only if owner asks for a ZIP/release refresh |
 | Candidate ZIP artifact is not present in `dist` | WARN | Run package script and verify ZIP/checksum before announcing ZIP update |
 | Dev dependency setup is implicit | WARN | Consider documenting/installing test tooling or keeping `scripts/check.ps1` as the canonical check |
 | NeuroGate page can change markup | WARN | Keep parser tests for old and current formats; add fixtures when page changes |
@@ -145,10 +146,8 @@ Do not do without explicit owner confirmation:
 
 ## Next Safe Step
 
-Release step:
+Next safe step:
 
-1. Run `powershell -ExecutionPolicy Bypass -File .\scripts\check.ps1`.
-2. Run `git diff --check`.
-3. Commit as `neurogate-overlay dd-mm-yyyy hh-mm v1.7.2: audit performance hardening`.
-4. Push `main`.
-5. Verify GitHub state.
+1. Let the owner live-test `v1.7.2`.
+2. If a public ZIP/release refresh is needed, run `powershell -ExecutionPolicy Bypass -File .\scripts\package-release.ps1`.
+3. Do not create GitHub Releases unless the owner explicitly asks.

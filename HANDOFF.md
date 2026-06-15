@@ -6,15 +6,15 @@ Format: Handoff v2 / short transfer sheet
 
 ## Current Snapshot
 
-Current version: `1.7.2` prepared for push with audit/performance fixes.
+Current version: `1.7.2` pushed with audit/performance fixes.
 Current branch: `main`
 GitHub: `https://github.com/RyandavisProject/neurogate-overlay`
-Latest pushed commit: `eab2ae8 neurogate-overlay 15-06-2026 09-37 v1.7.1: daily limit rollover fixes`
-Current status: WARN - `v1.7.2` is ready for final checks, commit and push.
+Latest pushed commit: `bf2b984 neurogate-overlay 15-06-2026 22-44 v1.7.2: audit performance hardening`
+Current status: PASS - `v1.7.2` is on GitHub `main`.
 
 Next safe step:
 
-- Run checks, commit `v1.7.2`, then push `main`.
+- Let the owner live-test `v1.7.2`; package ZIP/release only if explicitly requested.
 
 ## Project Goal
 
@@ -77,7 +77,7 @@ The overlay is local-first:
 Checked after push and local audit fixes:
 
 - `main` is synchronized with `origin/main`.
-- `eab2ae8` is on local `HEAD` and `origin/main`.
+- `bf2b984` is on local `HEAD` and `origin/main`.
 - GitHub repository is public.
 - `powershell -ExecutionPolicy Bypass -File .\scripts\check.ps1`: PASS, `106 tests OK`.
 
@@ -152,7 +152,7 @@ cd C:\Codex\neurogate-usage-overlay
 powershell -ExecutionPolicy Bypass -File .\scripts\check.ps1
 ```
 
-Then commit/push `v1.7.2` after successful checks.
+Then package only if the owner explicitly asks for ZIP/release artifacts.
 
 Verify GitHub state:
 

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "neurogate-overlay"
-version = "1.7.2"
+version = "1.8.0"
 description = "Always-on-top overlay for NeuroGate API usage limits (Windows & macOS)."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -27,7 +27,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-macos = ["rumps>=0.4.0"]
+macos = ["pyobjc-framework-Cocoa>=10.0", "pyobjc-framework-WebKit>=10.0"]
 
 [project.urls]
 Homepage = "https://github.com/RyandavisProject/neurogate-overlay"

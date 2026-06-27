@@ -5,7 +5,8 @@
 English note: this is a compact overlay for Vibemode API usage limits, supporting Windows and macOS.
 The main documentation is in Russian because the primary users are Russian-speaking.
 
-На **Windows** оверлей отображается как маленькое окно поверх рабочего стола.
+На **Windows** оверлей отображается как компактная тёмная карточка поверх рабочего стола:
+тариф, остатки `5ч`/`7д`, дневной лимит, прогресс-бары и меню действий.
 На **macOS** оверлей живёт в системном menu bar — кликаешь на белую иконку `VM` и видишь
 выпадающий попап с прогресс-барами по каждому окну лимитов.
 
@@ -19,12 +20,12 @@ The main documentation is in Russian because the primary users are Russian-speak
 
 <table>
   <tr>
-    <td><img src="docs/screenshots/overlay-tooltip.png" alt="Подсказка расхода" /></td>
-    <td><img src="docs/screenshots/overlay-menu.png" alt="Меню настроек" /></td>
+    <td><img src="docs/screenshots/overlay-tooltip.png" alt="Windows оверлей Vibemode 2.3" /></td>
+    <td><img src="docs/screenshots/overlay-menu.png" alt="Windows меню Vibemode 2.3" /></td>
   </tr>
   <tr>
-    <td align="center">Windows: подсказка расхода</td>
-    <td align="center">Windows: меню настроек</td>
+    <td align="center">Windows: оверлей 2.3</td>
+    <td align="center">Windows: меню 2.3</td>
   </tr>
   <tr>
     <td><img src="docs/screenshots/macos-menu-bar.png" alt="macOS menu bar" width="320" /></td>

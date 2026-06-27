@@ -43,6 +43,15 @@ def format_credits(value: int | None) -> str:
     return short_number(value)
 
 
+def format_limit_value(window: UsageWindow | None) -> str:
+    if not window:
+        return "-"
+    value = format_credits(window.display_value)
+    if window.limit_total:
+        return f"{value}/{short_number_clean(window.limit_total)}"
+    return value
+
+
 def short_number_clean(value: int | None) -> str:
     return short_number(value).replace(".0B", "B").replace(".0M", "M").replace(".0K", "K")
 
@@ -414,6 +423,20 @@ class UsageOverlay:
         max_y = max(margin, screen_height - self._scaled_height() - margin)
         return max(margin, min(x, max_x)), max(margin, min(y, max_y))
 
+    @staticmethod
+    def _clamp_popup_position(
+        x: int,
+        y: int,
+        width: int,
+        height: int,
+        screen_width: int,
+        screen_height: int,
+        margin: int = 8,
+    ) -> tuple[int, int]:
+        max_x = max(margin, screen_width - width - margin)
+        max_y = max(margin, screen_height - height - margin)
+        return max(margin, min(x, max_x)), max(margin, min(y, max_y))
+
     def _show_menu(self, event: tk.Event) -> None:
         self._hide_menu()
         if self._expire_daily_limit_if_needed():
@@ -426,7 +449,9 @@ class UsageOverlay:
         keep_browser_open = self._keep_browser_open()
         keep_browser_label = "Не закрывать ЛК"
         scale_label = "2x размер"
-        daily_limit_label = "Скрыть лимит на день" if self._daily_limit_enabled() else "Задать лимит на день"
+        daily_limit_label = "Скрыть лимит в день" if self._daily_limit_enabled() else "Задать лимит на день"
+        version_label = self._version_menu_label()
+        version_command = self._version_menu_command()
         checkbox_labels = {keep_browser_label, scale_label}
         rows: list[tuple[str, Callable[[], None] | None, bool]] = [
             ("Обновить лимиты", lambda: self.refresh(force=True), False),
@@ -459,7 +484,8 @@ class UsageOverlay:
         rows.extend(
             [
                 ("", None, False),
-                (self._version_menu_label(), self._version_menu_command(), False),
+                (version_label, version_command, False),
+                ("", None, False),
                 ("Сменить аккаунт", self._reset_account if self.account_resetter else None, False),
                 ("Закрыть", self.close, False),
             ]
@@ -472,7 +498,15 @@ class UsageOverlay:
         menu.attributes("-topmost", True)
         menu.attributes("-alpha", 0.97)
         menu.configure(bg="#0d1118", bd=0, highlightthickness=0)
-        menu.geometry(f"{width}x{height}+{event.x_root}+{event.y_root}")
+        x, y = self._clamp_popup_position(
+            int(event.x_root),
+            int(event.y_root),
+            width,
+            height,
+            self.root.winfo_screenwidth(),
+            self.root.winfo_screenheight(),
+        )
+        menu.geometry(f"{width}x{height}+{x}+{y}")
 
         canvas = tk.Canvas(menu, width=width, height=height, highlightthickness=0, bd=0, bg="#0d1118")
         canvas.pack(fill="both", expand=True)
@@ -488,6 +522,7 @@ class UsageOverlay:
             tag = f"item-{index}"
             bg_tag = f"item-bg-{index}"
             fill = "#182333" if active else "#0f151f"
+            disabled = command is None
             canvas.create_rectangle(4, y, width - 4, y + item_height, fill=fill, outline="", tags=(tag, bg_tag))
             text_x = 14
             if label in checkbox_labels:
@@ -516,11 +551,14 @@ class UsageOverlay:
                         width=2,
                         tags=tag,
                     )
+            text_fill = "#f4f7fb" if not active else "#76a8ff"
+            if disabled:
+                text_fill = "#8793a4"
             canvas.create_text(
                 text_x,
                 y + item_height // 2,
                 text=label,
-                fill="#f4f7fb" if not active else "#76a8ff",
+                fill=text_fill,
                 font=(self.UI_FONT, 8, "normal"),
                 anchor="w",
                 tags=tag,
@@ -533,9 +571,10 @@ class UsageOverlay:
                 if action:
                     action()
 
-            canvas.tag_bind(tag, "<Enter>", lambda _event, bg_tag=bg_tag: canvas.itemconfigure(bg_tag, fill="#1b2635"))
-            canvas.tag_bind(tag, "<Leave>", lambda _event, bg_tag=bg_tag, fill=fill: canvas.itemconfigure(bg_tag, fill=fill))
-            canvas.tag_bind(tag, "<Button-1>", lambda _event, action=run_action: action())
+            if command:
+                canvas.tag_bind(tag, "<Enter>", lambda _event, bg_tag=bg_tag: canvas.itemconfigure(bg_tag, fill="#1b2635"))
+                canvas.tag_bind(tag, "<Leave>", lambda _event, bg_tag=bg_tag, fill=fill: canvas.itemconfigure(bg_tag, fill=fill))
+                canvas.tag_bind(tag, "<Button-1>", lambda _event, action=run_action: action())
             y += item_height
 
         menu.bind("<Escape>", lambda _event: self._hide_menu())
@@ -969,13 +1008,18 @@ class UsageOverlay:
             return None
         return days
 
+    @staticmethod
+    def _daily_limit_divisor_days(reset_text: str | None, plan_status: str | None = None) -> float:
+        days = UsageOverlay._remaining_plan_days(reset_text) or UsageOverlay._remaining_plan_days(plan_status) or 1.0
+        return max(1.0, days)
+
     def _default_daily_limit_credits(self) -> int | None:
         if not self.last_snapshot:
             return None
         window = find_window(self.last_snapshot, "7d") or self._window_by_index(1)
         if not window or window.credits_remaining is None:
             return None
-        days = self._remaining_plan_days(window.reset_text) or self._remaining_plan_days(self.last_snapshot.plan_status) or 1
+        days = self._daily_limit_divisor_days(window.reset_text, self.last_snapshot.plan_status)
         return max(1, round(window.credits_remaining / days))
 
     def _schedule_next_refresh(self) -> None:
@@ -1205,7 +1249,7 @@ class UsageOverlay:
 
     def _draw_limit_row(self, y: int, fallback_label: str, window: UsageWindow | None) -> None:
         label = self._compact_window_title(window, fallback_label)
-        value = format_credits(window.display_value if window else None)
+        value = format_limit_value(window)
         reset = compact_reset_text(window.reset_text if window else None)
         percent = self._window_progress_percent(window)
         tooltip = self._limit_tooltip_text(label, window)
@@ -1218,15 +1262,15 @@ class UsageOverlay:
         self._text(9, y, label, "#9aa8ba", 9, "normal", family=self.UI_FONT)
         self._text(31, y, "остаток", "#667386", 8, "normal", family=self.UI_FONT)
         self.canvas.create_rectangle(
-            self._s(92),
+            self._s(84),
             self._s(y + 1),
-            self._s(158),
+            self._s(172),
             self._s(y + 16),
             fill="#101722",
             outline="",
             tags=value_tags,
         )
-        self._text(124, y + 8, value, "#ffb86b", 10, "bold", "center", tags=value_tags, family=self.NUMBER_FONT)
+        self._text(128, y + 8, value, "#ffb86b", 9, "bold", "center", tags=value_tags, family=self.NUMBER_FONT)
         self._text(214, y + 2, reset, "#8793a4", 8, "normal", "ne", family=self.UI_FONT)
         self._progress(30, y + 17, 184, percent)
 
@@ -1255,14 +1299,13 @@ class UsageOverlay:
         if not values:
             return
         spent, limit, _floor, percent = values
-        value = f"{short_number_clean(spent)} / {short_number_clean(limit)}"
+        value = f"{short_number_clean(spent)}/{short_number_clean(limit)}"
         percent_text = compact_percent(percent)
         row_tag = "daily-limit-row"
         value_tag = "daily-limit-value"
         percent_tag = "daily-limit-percent"
         color = "#ff4d5d" if percent >= 100 else "#ffe082"
         percent_color = "#8793a4"
-        value_x = self._daily_limit_value_x()
 
         self.canvas.create_rectangle(
             self._s(4),
@@ -1275,24 +1318,17 @@ class UsageOverlay:
         )
         self._text(9, y, "лимит/день", "#667386", 8, "normal", tags=row_tag, family=self.UI_FONT)
         self.canvas.create_rectangle(
-            self._s(value_x - 4),
+            self._s(84),
             self._s(y + 1),
-            self._s(154),
+            self._s(172),
             self._s(y + 16),
             fill="#101722",
             outline="",
             tags=(row_tag, value_tag),
         )
-        self._text(value_x, y + 8, value, color, 9, "bold", "w", tags=(row_tag, value_tag), family=self.NUMBER_FONT)
+        self._text(128, y + 8, value, color, 9, "bold", "center", tags=(row_tag, value_tag), family=self.NUMBER_FONT)
         self._text(214, y + 2, percent_text, percent_color, 8, "normal", "ne", tags=(row_tag, percent_tag), family=self.UI_FONT)
         self._daily_progress(30, y + 17, 184, percent, tags=row_tag)
-
-    def _daily_limit_value_x(self) -> int:
-        window = self._window_by_index(1) or self._window_by_index(0)
-        if not window:
-            return 82
-        value_width = self._measure_text(format_credits(window.display_value), 9, "bold", self.NUMBER_FONT)
-        return max(80, round(124 - value_width / 2) - 10)
 
     def _render(self) -> None:
         if self._expire_daily_limit_if_needed():
@@ -1877,7 +1913,7 @@ if sys.platform == "darwin":
                 return None
             window = find_window(self.last_snapshot, "7d")
             if window and window.credits_remaining is not None:
-                days = UsageOverlay._remaining_plan_days(window.reset_text) or 1
+                days = UsageOverlay._daily_limit_divisor_days(window.reset_text, self.last_snapshot.plan_status)
                 return max(1, round(window.credits_remaining / days))
             return None
 

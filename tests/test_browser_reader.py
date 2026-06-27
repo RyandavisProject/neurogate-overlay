@@ -6,6 +6,7 @@ from unittest.mock import patch
 
 from neurogate_usage_overlay.browser_reader import (
     AUTO_LOGIN_DELAY_ATTEMPTS,
+    BODY_TEXT_TIMEOUT_MS,
     CACHE_SIZE_BYTES,
     LOGIN_PROMPT_CONFIRM_ATTEMPTS,
     USAGE_URL,
@@ -486,6 +487,28 @@ class BrowserReaderModeTest(unittest.TestCase):
 
         self.assertIn("5-часовое окно", text)
         self.assertEqual(attempts, 1)
+
+    def test_wait_for_usage_text_uses_short_body_timeout(self):
+        reader = NeurogateUsageReader(BrowserSettings(headless=True, timeout_ms=45_000))
+        seen_timeouts: list[int] = []
+
+        class Locator:
+            def inner_text(self, timeout: int) -> str:
+                seen_timeouts.append(timeout)
+                return "Квота\n5-часовое окно\nКвота\n7-дневное окно"
+
+        class Page:
+            def wait_for_timeout(self, _timeout: int) -> None:
+                return None
+
+            def locator(self, _selector: str) -> Locator:
+                return Locator()
+
+        reader._page = Page()
+
+        reader._wait_for_usage_text()
+
+        self.assertEqual(seen_timeouts, [BODY_TEXT_TIMEOUT_MS])
 
     def test_successful_visible_login_hides_current_window(self):
         reader = NeurogateUsageReader(BrowserSettings(headless=True))

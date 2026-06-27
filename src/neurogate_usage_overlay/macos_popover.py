@@ -32,7 +32,8 @@ _VM_BLOB_IMAGE: Any = None
 # ── JS bridge: intercepts window.__ng_action(name) calls ─────────────────────
 _BRIDGE_SCRIPT = """
 window.__ng_action = function(name, payload) {
-    fetch('/action/' + name, {
+    var token = encodeURIComponent(window.__NG_ACTION_TOKEN__ || '');
+    fetch('/action/' + encodeURIComponent(name) + '?token=' + token, {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify(payload || {})
@@ -41,7 +42,8 @@ window.__ng_action = function(name, payload) {
 // Report content height to NSPopover after render
 function __ng_resize() {
     var h = document.documentElement.scrollHeight;
-    fetch('/resize/' + h, {method: 'POST'}).catch(function(){});
+    var token = encodeURIComponent(window.__NG_ACTION_TOKEN__ || '');
+    fetch('/resize/' + h + '?token=' + token, {method: 'POST'}).catch(function(){});
 }
 document.addEventListener('DOMContentLoaded', function() {
     __ng_resize();

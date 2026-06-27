@@ -1,153 +1,118 @@
-# PROJECT_STATE - NeuroGate API Overlay
+# PROJECT_STATE - Vibemode Overlay
 
-Updated: 15-06-2026
-Project: NeuroGate API Overlay
-Project id: neurogate-overlay
+Updated: 26-06-2026
+Project: Vibemode Overlay
+Project id: vibemode
 Local path: `C:\Codex\neurogate-usage-overlay`
-GitHub: `https://github.com/RyandavisProject/neurogate-overlay`
-Current version: `1.7.2` pushed with audit/performance fixes.
-Current branch: `main`
-Latest commit: `bf2b984 neurogate-overlay 15-06-2026 22-44 v1.7.2: audit performance hardening`
-CPLS status: PASS - public project is usable and `v1.7.2` is pushed to GitHub `main`.
-Current mode: patch-safe; preserve current compact UI unless owner explicitly asks for visual changes.
+GitHub: `https://github.com/RyandavisProject/vibemode`
+Current local version: `2.2` candidate, not pushed in this audit turn.
+Current branch: `codex/vibemode-2.0`
+Latest pushed commit seen locally: `928d05d vibemode 25-06-2026 23-26 v2.1: restore reset timers`
+Current mode: audit/hardening; no commit, push, GitHub Release, or public version change without owner confirmation.
 
 ## State Summary
 
-`NeuroGate API Overlay` is a small local-first Windows overlay for NeuroGate API limits.
-It shows the current tariff, tariff time left, 5-hour and 7-day remaining limits,
-progress bars, refresh time, optional 2x scale, usage tooltips, and an optional manual
-daily spending limit row.
+Vibemode Overlay is a local-first Python desktop project for Vibemode API usage limits.
 
-The project is public on GitHub and intended for Russian-speaking users. README,
-CHANGELOG and UI text should stay mostly Russian. The product must not collect or
-send private data to the project owner or third parties. User auth/session state is
-local to the user's machine.
+- Windows: compact always-on-top Tkinter overlay.
+- macOS: menu bar status item with NSPopover/WKWebView popover.
+- Data source: `https://portal.vibemod.pro/client` and `https://api.vibemod.pro` through the user's own local Playwright/Chrome session.
+- Public install paths: Git/Codex install and ZIP installer.
+- Updates: GitHub Releases with ZIP plus SHA256.
+
+The project is public and intended mainly for Russian-speaking users. The app must not collect, publish, or transmit passwords, cookies, browser profiles, raw cabinet text, tokens, local logs, or private account data.
 
 ## Current Product Surface
 
-- Compact borderless always-on-top overlay.
-- Right-click settings menu.
-- Manual refresh plus saved refresh interval.
-- Optional `Не закрывать ЛК` mode.
-- Account switching flow via `Сменить аккаунт`.
-- Safe autologin only when the browser already has a stable prefilled login form
-  and the user is not changing account.
-- Local browser profile under `%USERPROFILE%\.neurogate-usage-overlay\browser-profile`.
-- Daily usage file under `%USERPROFILE%\.neurogate-usage-overlay\usage-daily.json`.
-- Overlay state under `%USERPROFILE%\.neurogate-usage-overlay\overlay-state.json`.
-- Public ZIP/Git install flows and update checker.
+- Compact limit UI with tariff name, tariff time left, 5-hour and 7-day rows.
+- `remaining/total` display for limit rows when total limits are known.
+- Reset time on the right side of 5-hour and 7-day rows.
+- Progress bars for limit consumption.
+- Optional manually set `limit/day` row for the current calendar day only.
+- Daily-limit suggestion formula: `7d remaining / remaining 7d reset time`, with hours converted to decimal days and divisor never below one day.
+- Daily-limit row is hidden the next calendar day until the user manually sets a new value.
+- Right-click menu on Windows; popover actions on macOS.
+- Saved refresh interval, saved 2x scale, saved Windows overlay position.
+- Safe account switching via `Сменить аккаунт`.
+- Safe auto-login only for stable prefilled forms, disabled during account switching.
+- Hidden browser by default after successful login, with optional `Не закрывать ЛК`.
 
-## Latest Update - 15-06-2026
+## Local Data Boundary
 
-Version `1.7.2` was committed and pushed to `main`.
+Local-only files live under:
 
-Changed:
+```text
+%USERPROFILE%\.neurogate-usage-overlay\
+```
 
-- `лимит/день` now applies only on the calendar day when the user manually set it.
-- On the next calendar day the third row is hidden and yesterday's daily limit is
-  cleared instead of being carried forward.
-- `Задать лимит на день` again suggests a calculated number, but saves it only
-  after manual confirmation.
-- Suggested daily limit formula: `7d remaining / remaining 7d reset time`, where
-  hours and minutes are converted to decimal days.
-- `Сменить аккаунт` was moved near the bottom of the menu, directly above `Закрыть`.
-- README and CHANGELOG were updated for `1.7.2`.
-- Drag movement is batched and no longer saves window position during every mouse movement.
-- Canvas tooltip/daily-limit bindings are installed once instead of being recreated on every render.
-- Browser cache cleanup removes only safe cache folders and keeps cookies/session storage intact.
-- Chrome disk/media cache is capped.
-- Reader worker queue is bounded and worker calls now have timeout protection.
-- ZIP updater now requires SHA256 for ZIP updates by default; unverified ZIP updates require explicit local-dev override.
-- `security_best_practices_report.md` was refreshed with the current audit.
+Important files:
 
-Repository state after push:
+- `browser-profile/` - local browser session, private.
+- `overlay-state.json` - UI preferences and daily limit for the current day.
+- `usage-daily.json` - current-day baseline for today's spending, rewritten instead of appended.
+- `overlay.lock` / `overlay.pid` - local single-instance/runtime helpers.
+- local logs - private diagnostic logs, never release artifacts.
 
-- `main` is synchronized with `origin/main`.
-- `bf2b984` is on local `HEAD` and `origin/main`.
-- GitHub repository is public.
-- No GitHub Release was created by owner preference.
-- Existing `dist` artifacts currently go up to `neurogate-overlay-v1.7.0.zip`.
-- No ZIP has been built yet for the local audit-fix candidate.
+## Current Audit Candidate - 26-06-2026
 
-## Verification
+Uncommitted v2.2 hardening work currently includes:
 
-Verified after push:
+- macOS ZIP updater requires SHA256 by default, matching Windows.
+- macOS popover local action endpoints require a per-session token; GET action calls are blocked.
+- macOS `.app` launcher embeds the actual project root instead of guessing it later.
+- macOS `run-overlay.sh` no longer kills broad brand-name process matches.
+- Windows `run-overlay.ps1` no longer kills broad brand-name Python process matches.
+- Windows context menu is clamped inside the visible screen.
+- Browser body-text polling uses a short timeout per polling attempt instead of repeatedly waiting the long global timeout.
+- macOS popover can render `remaining/total` values like Windows.
+- CI now includes a macOS smoke/unit job with macOS optional dependencies.
+- Release ZIP packaging skips internal handoff/state/audit files.
+- README, CHANGELOG, privacy, architecture, publishing, and security audit docs are updated for the audit candidate.
 
-- `git status --short --branch`: clean, `main...origin/main`.
-- `git log --oneline -3 --decorate`: `bf2b984` is on `HEAD` and `origin/main`.
-- `gh repo view RyandavisProject/neurogate-overlay`: repository is public and default
-  branch is `main`.
-- `powershell -ExecutionPolicy Bypass -File .\scripts\check.ps1`: PASS, `106 tests OK` after local audit/performance fixes.
+## Verification Commands
 
-Tooling note:
+Canonical local checks:
 
-- `pytest` is not installed in the active Python or project `.venv`.
-- The supported project check command is `powershell -ExecutionPolicy Bypass -File .\scripts\check.ps1`,
-  which uses `unittest`, compile checks and PowerShell script parsing.
+```powershell
+cd C:\Codex\neurogate-usage-overlay
+powershell -ExecutionPolicy Bypass -File .\scripts\check.ps1
+git diff --check
+powershell -ExecutionPolicy Bypass -File .\scripts\package-release.ps1
+```
 
-## Accepted Product Rules
+When packaging is run, verify the ZIP does not contain local or private files:
 
-- Do not create GitHub Releases unless the owner explicitly asks.
-- Do not change compact layout, positions, fonts or colors casually.
-- Dates in docs should use `dd-mm-yyyy`.
-- Commit names should follow: `neurogate-overlay dd-mm-yyyy hh-mm vX.Y.Z: short meaning`.
-- Public sharing should normally link to the main repository page:
-  `https://github.com/RyandavisProject/neurogate-overlay`.
-- README should stay readable on the main GitHub page; avoid creating extra pages
-  for chat-only announcements unless the owner asks.
+```powershell
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+$zip='C:\Codex\neurogate-usage-overlay\dist\vibemode-v2.2.zip'
+[IO.Compression.ZipFile]::OpenRead($zip).Entries.FullName |
+  Select-String -Pattern '__pycache__|egg-info|browser-profile|\.venv|\.git/|overlay-debug|overlay-ui|usage-daily|overlay-state|\.env|\.har|\.trace|\.cookies|PROJECT_STATE|HANDOFF|security_best_practices'
+```
 
-## Daily Limit Rules
+## Owner Rules
 
-- The daily limit is manually set by the user.
-- It is valid only for the calendar day when it was set.
-- It must not be automatically carried into the next day.
-- If hidden and set again, the dialog should suggest a calculated value but still
-  require user confirmation.
-- Suggested value is based on current 7-day remaining limit divided by the remaining
-  7-day reset time in decimal days.
-- Third row appears only when the daily limit is active for today.
-- Double-click on the third row opens daily limit editing.
-- Progress color scale:
-  - up to 50%: blue;
-  - after 50%: yellow;
-  - around 75%: orange;
-  - 100% and above: red.
-
-## Safety Boundary
-
-Do not commit or expose:
-
-- GitHub tokens, API keys, passwords or `.env` files;
-- local NeuroGate browser profiles;
-- `%USERPROFILE%\.neurogate-usage-overlay\browser-profile`;
-- local user state, logs with private content, or raw personal account data;
-- temporary install/update sandboxes unless intentionally sanitized.
-
-Do not do without explicit owner confirmation:
-
-- delete repositories;
-- force-push;
-- change GitHub repository visibility;
-- create GitHub Releases;
-- publish installers or binaries as releases;
-- change account/session behavior in a way that can log a new user into the owner's account.
+- Speak Russian by default.
+- Dates in docs: `dd-mm-yyyy`.
+- Keep the overlay compact; avoid visual drift unless the owner explicitly asks.
+- Do not commit/push/release without separate confirmation.
+- Do not create GitHub Releases unless explicitly asked.
+- Public user links normally point to the main repo: `https://github.com/RyandavisProject/vibemode`.
+- Commit naming pattern: `vibemode dd-mm-yyyy hh-mm vX.Y: short meaning`.
+- Do not touch private browser profiles, cookies, tokens, passwords, or local session files.
 
 ## Current Risks
 
 | Risk | Level | Mitigation |
 | --- | --- | --- |
-| `v1.7.2` ZIP artifact is not present in `dist` | WARN | Build package only if owner asks for a ZIP/release refresh |
-| Candidate ZIP artifact is not present in `dist` | WARN | Run package script and verify ZIP/checksum before announcing ZIP update |
-| Dev dependency setup is implicit | WARN | Consider documenting/installing test tooling or keeping `scripts/check.ps1` as the canonical check |
-| NeuroGate page can change markup | WARN | Keep parser tests for old and current formats; add fixtures when page changes |
-| Autologin can annoy users or affect account switching | WARN | Keep safe-autologin guardrails and preserve explicit `Сменить аккаунт` behavior |
-| Compact UI is sensitive to small layout changes | WARN | Ask before visual redesign; prefer tiny measured changes |
-| Public repo may accidentally include local data | BLOCKER | Keep `.gitignore`, release allowlist and manual review before packaging |
+| Live Vibemode cabinet can change markup/API | WARN | Keep API adapter first, parser fallback second, add anonymized fixtures when layouts change |
+| macOS UI cannot be fully visually verified from Windows | WARN | Use macOS CI smoke plus manual macOS run before public release |
+| GitHub Releases are required for in-app update notifications | WARN | After commit/push, create release only with explicit owner approval and attach ZIP + SHA256 |
+| Compact UI is pixel-sensitive | WARN | Keep small measured changes and test 1x/2x states |
+| Public repo/ZIP can accidentally include local data | BLOCKER | Keep `.gitignore`, packaging skip list, and ZIP privacy scan before release |
 
 ## Next Safe Step
 
-Next safe step:
-
-1. Let the owner live-test `v1.7.2`.
-2. If a public ZIP/release refresh is needed, run `powershell -ExecutionPolicy Bypass -File .\scripts\package-release.ps1`.
-3. Do not create GitHub Releases unless the owner explicitly asks.
+1. Finish the current audit hardening pass.
+2. Run `scripts/check.ps1`, `git diff --check`, and package/ZIP privacy verification.
+3. Show the owner the audit result and changed files.
+4. Wait for explicit confirmation before commit, push, or GitHub Release.

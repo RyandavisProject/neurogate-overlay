@@ -2,12 +2,13 @@ import unittest
 import tempfile
 import threading
 import time
+import tkinter as tk
 from datetime import datetime, timedelta
 from pathlib import Path
 from unittest.mock import patch
 
 from neurogate_usage_overlay.models import UsageSnapshot, UsageWindow
-from neurogate_usage_overlay.overlay import UsageOverlay, compact_percent, display_version, version_menu_label
+from neurogate_usage_overlay.overlay import UsageOverlay, compact_percent, display_version, format_limit_value, version_menu_label
 from neurogate_usage_overlay.update_checker import UpdateInfo
 
 
@@ -351,12 +352,33 @@ class OverlayPositionTest(unittest.TestCase):
 
         self.assertEqual(overlay._content_height(), UsageOverlay.HEIGHT)
 
+    def test_context_menu_position_is_clamped_to_screen(self):
+        self.assertEqual(
+            UsageOverlay._clamp_popup_position(790, 590, 160, 260, 800, 600),
+            (632, 332),
+        )
+        self.assertEqual(
+            UsageOverlay._clamp_popup_position(-40, -20, 160, 260, 800, 600),
+            (8, 8),
+        )
+
 
 class OverlayProgressTest(unittest.TestCase):
     def test_compact_percent_formats_daily_limit_progress(self):
         self.assertEqual(compact_percent(13.29), "13%")
         self.assertEqual(compact_percent(8.71), "8.7%")
         self.assertEqual(compact_percent(100.4), "100%")
+
+    def test_limit_value_formats_remaining_over_total_when_available(self):
+        self.assertEqual(
+            format_limit_value(UsageWindow(title="5 часов", credits_remaining=114_000_000, limit_total=120_000_000)),
+            "114.0M/120M",
+        )
+        self.assertEqual(
+            format_limit_value(UsageWindow(title="7 дней", credits_remaining=193_700_000, limit_total=600_000_000)),
+            "193.7M/600M",
+        )
+        self.assertEqual(format_limit_value(UsageWindow(title="7 дней", credits_remaining=193_700_000)), "193.7M")
 
     def test_credit_input_accepts_millions_suffix(self):
         self.assertEqual(UsageOverlay._parse_credit_input("82M"), 82_000_000)
@@ -376,6 +398,11 @@ class OverlayProgressTest(unittest.TestCase):
         self.assertAlmostEqual(UsageOverlay._remaining_plan_days("активен еще 2 дня 18 часов"), 2.75)
         self.assertAlmostEqual(UsageOverlay._remaining_plan_days("ост. 4д 10ч"), 4 + 10 / 24)
 
+    def test_daily_limit_divisor_never_goes_below_one_day(self):
+        self.assertEqual(UsageOverlay._daily_limit_divisor_days("10ч"), 1.0)
+        self.assertEqual(UsageOverlay._daily_limit_divisor_days("20ч 7м"), 1.0)
+        self.assertAlmostEqual(UsageOverlay._daily_limit_divisor_days("2д 12ч"), 2.5)
+
     def test_daily_limit_dialog_suggests_seven_day_remaining_divided_by_reset_days(self):
         overlay = UsageOverlay.__new__(UsageOverlay)
         overlay.daily_limit_credits = None
@@ -387,6 +414,17 @@ class OverlayProgressTest(unittest.TestCase):
         )
 
         self.assertEqual(overlay._daily_limit_dialog_default_credits(), 78_113_208)
+
+    def test_daily_limit_dialog_never_suggests_more_than_weekly_remaining(self):
+        overlay = UsageOverlay.__new__(UsageOverlay)
+        overlay.daily_limit_credits = None
+        overlay.daily_limit_set_at = None
+        overlay.last_snapshot = UsageSnapshot(
+            updated_at=datetime.now(),
+            windows=[UsageWindow(title="7 дней", credits_remaining=193_700_000, reset_text="10ч")],
+        )
+
+        self.assertEqual(overlay._daily_limit_dialog_default_credits(), 193_700_000)
 
     def test_daily_limit_hint_reports_weekly_floor_after_daily_limit(self):
         overlay = UsageOverlay.__new__(UsageOverlay)
@@ -550,6 +588,12 @@ class OverlayRenderTest(unittest.TestCase):
             self.assertEqual(overlay.canvas.itemcget(percent_items[0], "text"), "13%")
             value_items = overlay.canvas.find_withtag("daily-limit-value")
             self.assertGreaterEqual(len(value_items), 1)
+            value_text_items = [item for item in value_items if overlay.canvas.type(item) == "text"]
+            value_texts = [overlay.canvas.itemcget(item, "text") for item in value_text_items]
+            self.assertIn("10.9M/82M", value_texts)
+            self.assertNotIn("10.9M / 82M", value_texts)
+            for item in value_text_items:
+                self.assertEqual(overlay.canvas.itemcget(item, "anchor"), "center")
             for item in value_items:
                 self.assertNotIn("tooltip-target", overlay.canvas.gettags(item))
             self.assertNotIn("daily-limit-value", overlay.tooltip_text_by_tag)
@@ -766,6 +810,41 @@ class OverlayUpdateTest(unittest.TestCase):
         self.assertIsNotNone(command)
         assert command is not None
         self.assertIs(command.__func__, overlay._start_update.__func__)
+
+    def test_version_menu_row_is_read_only_without_update(self):
+        overlay = UsageOverlay(lambda: UsageSnapshot(updated_at=datetime.now()))
+        try:
+            overlay.update_info = None
+            overlay._show_menu(type("Event", (), {"x_root": 100, "y_root": 100})())
+            assert overlay.menu_window is not None
+            canvas = next(child for child in overlay.menu_window.winfo_children() if isinstance(child, tk.Canvas))
+            label = overlay._version_menu_label()
+            text_item = next(item for item in canvas.find_all() if canvas.type(item) == "text" and canvas.itemcget(item, "text") == label)
+            tag = next(tag for tag in canvas.gettags(text_item) if tag.startswith("item-"))
+
+            self.assertEqual(canvas.itemcget(text_item, "fill"), "#8793a4")
+            self.assertEqual(canvas.tag_bind(tag, "<Button-1>"), "")
+        finally:
+            overlay.close()
+
+    def test_version_menu_row_is_clickable_when_update_is_available(self):
+        overlay = UsageOverlay(lambda: UsageSnapshot(updated_at=datetime.now()))
+        try:
+            overlay.update_info = UpdateInfo(
+                current_version="2.1",
+                latest_version="2.2",
+                release_url="https://github.com/RyandavisProject/vibemode/releases/tag/v2.2",
+            )
+            overlay._show_menu(type("Event", (), {"x_root": 100, "y_root": 100})())
+            assert overlay.menu_window is not None
+            canvas = next(child for child in overlay.menu_window.winfo_children() if isinstance(child, tk.Canvas))
+            label = overlay._version_menu_label()
+            text_item = next(item for item in canvas.find_all() if canvas.type(item) == "text" and canvas.itemcget(item, "text") == label)
+            tag = next(tag for tag in canvas.gettags(text_item) if tag.startswith("item-"))
+
+            self.assertNotEqual(canvas.tag_bind(tag, "<Button-1>"), "")
+        finally:
+            overlay.close()
 
     def test_start_update_launches_update_script_with_target_version(self):
         overlay = UsageOverlay.__new__(UsageOverlay)

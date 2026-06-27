@@ -15,6 +15,26 @@ function Stop-OverlayProcess($Process) {
     Stop-Process -Id $Process.ProcessId -Force -ErrorAction SilentlyContinue
 }
 
+function Test-OverlayPythonProcess($Process) {
+    if (-not $Process -or $Process.Name -notin @('python.exe', 'pythonw.exe', 'py.exe')) {
+        return $false
+    }
+    $CommandLine = $Process.CommandLine
+    if (-not $CommandLine) {
+        return $false
+    }
+    if ($CommandLine -match '(^|\s)-m\s+neurogate_usage_overlay(\s|$)') {
+        return $true
+    }
+    if (
+        $CommandLine -match $EscapedRoot -and
+        $CommandLine -match '(^|\s|\\)(vibemode|vibemod|neurogate-api|vibemode-overlay|neurogate-usage-overlay)(\.exe)?(\s|$)'
+    ) {
+        return $true
+    }
+    return $false
+}
+
 function Stop-OverlayFromPidFile {
     if (-not (Test-Path $PidPath)) {
         return
@@ -26,12 +46,7 @@ function Stop-OverlayFromPidFile {
         return
     }
     $Existing = Get-CimInstance Win32_Process -Filter "ProcessId = $ParsedPid" -ErrorAction SilentlyContinue
-    if (
-        $Existing -and
-        $Existing.Name -in @('python.exe', 'pythonw.exe', 'py.exe') -and
-        $Existing.CommandLine -and
-        $Existing.CommandLine -match '(\-m\s+neurogate_usage_overlay|vibemode|vibemode|neurogate-api|vibemode-overlay|neurogate-usage-overlay)'
-    ) {
+    if (Test-OverlayPythonProcess $Existing) {
         Stop-OverlayProcess $Existing
         Start-Sleep -Milliseconds 500
     }
@@ -55,10 +70,7 @@ Get-CimInstance Win32_Process |
             return $false
         }
         (
-            (
-                $_.Name -in @('python.exe', 'pythonw.exe', 'py.exe') -and
-                $CommandLine -match '(\-m\s+neurogate_usage_overlay|vibemode|vibemode|neurogate-api|vibemode-overlay|neurogate-usage-overlay)'
-            ) -or
+            (Test-OverlayPythonProcess $_) -or
             ($_.Name -eq 'node.exe' -and $CommandLine -match $EscapedRoot) -or
             ($_.Name -eq 'chrome.exe' -and $CommandLine -match $EscapedProfilePath)
         )

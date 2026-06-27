@@ -59,9 +59,11 @@ EOF
 
 # Write the launcher script.
 # ROOT is captured at install time so the bundle can live in ~/Applications.
+PROJECT_ROOT_QUOTED="$(printf '%q' "$ROOT")"
 cat > "$MACOS_DIR/launch" <<LAUNCH
 #!/usr/bin/env bash
-exec bash "$ROOT/scripts/run-overlay.sh"
+ROOT=$PROJECT_ROOT_QUOTED
+exec bash "\$ROOT/scripts/run-overlay.sh"
 LAUNCH
 
 chmod +x "$MACOS_DIR/launch"

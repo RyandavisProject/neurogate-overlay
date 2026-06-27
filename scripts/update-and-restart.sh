@@ -15,6 +15,7 @@ NO_SHORTCUT=0
 SHORTCUT_DIR=""
 RELEASE_ZIP_URL="${VIBEMODE_UPDATE_ZIP_URL:-${VIBEMOD_UPDATE_ZIP_URL:-${NEUROGATE_UPDATE_ZIP_URL:-}}}"
 RELEASE_SHA256="${NEUROGATE_UPDATE_SHA256:-}"
+ALLOW_UNVERIFIED_ZIP="${VIBEMODE_ALLOW_UNVERIFIED_UPDATE:-${NEUROGATE_ALLOW_UNVERIFIED_UPDATE:-0}}"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -24,6 +25,7 @@ while [[ $# -gt 0 ]]; do
         --shortcut-dir)   SHORTCUT_DIR="$2";    shift 2 ;;
         --release-zip-url) RELEASE_ZIP_URL="$2"; shift 2 ;;
         --release-sha256)  RELEASE_SHA256="$2";  shift 2 ;;
+        --allow-unverified-zip) ALLOW_UNVERIFIED_ZIP=1; shift ;;
         *) echo "Unknown option: $1" >&2; exit 1 ;;
     esac
 done
@@ -39,8 +41,12 @@ confirm_sha256() {
     local expected
     expected="$(normalize_sha256 "${RELEASE_SHA256:-}")"
     if [[ -z "$expected" ]]; then
-        echo "SHA256 checksum was not provided; continuing without archive integrity verification."
-        return
+        if [[ "$ALLOW_UNVERIFIED_ZIP" == "1" ]]; then
+            echo "SHA256 checksum was not provided; continuing because unverified ZIP updates were explicitly allowed."
+            return
+        fi
+        echo "SHA256 checksum is required for ZIP updates. Attach a .sha256 sidecar, pass --release-sha256, or use --allow-unverified-zip only for local development." >&2
+        exit 1
     fi
     if ! echo "$expected" | grep -qE '^[0-9a-f]{64}$'; then
         echo "Invalid SHA256 checksum format." >&2; exit 1
@@ -51,6 +57,21 @@ confirm_sha256() {
         echo "ZIP checksum mismatch. Expected $expected but got $actual." >&2; exit 1
     fi
     step "ZIP checksum verified."
+}
+
+load_sha256_sidecar() {
+    local archive_url="$1"
+    local sidecar_path="$2"
+    if [[ -n "${RELEASE_SHA256:-}" ]]; then
+        return
+    fi
+    if [[ -f "$archive_url" ]]; then
+        [[ -f "$archive_url.sha256" ]] && RELEASE_SHA256="$(cat "$archive_url.sha256")"
+        return
+    fi
+    if curl -fsSL "$archive_url.sha256" -o "$sidecar_path"; then
+        RELEASE_SHA256="$(cat "$sidecar_path")"
+    fi
 }
 
 assert_under_directory() {
@@ -109,6 +130,7 @@ update_from_zip() {
     local tmp_dir
     tmp_dir="$(mktemp -d)"
     local zip_path="$tmp_dir/release.zip"
+    local sidecar_path="$tmp_dir/release.zip.sha256"
     local extract_path="$tmp_dir/extract"
     local archive_url="${RELEASE_ZIP_URL:-https://github.com/RyandavisProject/vibemode/archive/refs/tags/${version_tag}.zip}"
 
@@ -120,6 +142,7 @@ update_from_zip() {
     else
         curl -fsSL "$archive_url" -o "$zip_path"
     fi
+    load_sha256_sidecar "$archive_url" "$sidecar_path"
     confirm_sha256 "$zip_path"
 
     step "Extracting update..."

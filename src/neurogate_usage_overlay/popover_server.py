@@ -7,9 +7,11 @@ that WKWebView should load.
 from __future__ import annotations
 
 import json
+import secrets
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Any, Callable
+from urllib.parse import parse_qs, unquote, urlparse
 
 from .models import UsageSnapshot
 
@@ -244,6 +246,7 @@ _TEMPLATE = """\
 <div id="root"></div>
 <script>
 let data = %DATA%;
+window.__NG_ACTION_TOKEN__ = data.action_token || "";
 let intervalMenuOpen = false;
 let dailyEditorOpen = false;
 let dailyDraft = null;
@@ -282,7 +285,7 @@ function render() {
       const pct = w.progress_percent != null ? w.progress_percent : (w.limit_percent != null ? w.limit_percent : null);
       const barW = pct != null ? Math.min(100, pct).toFixed(1) : 0;
       const cls = barClass(pct);
-      const val = w.credits_remaining != null ? shortNum(w.credits_remaining) + " ост." : (w.limit_used != null ? shortNum(w.limit_used) + " / " + shortNum(w.limit_total) : "—");
+      const val = limitValue(w);
       const pctLabel = pct != null ? Math.round(pct) + "%" : "";
       html += `<div class="card">
         <div class="card-row">
@@ -361,6 +364,19 @@ function dailyLimitBlock() {
     </div>`;
   }
   return "";
+}
+
+function limitValue(w) {
+  if (w.credits_remaining != null && w.limit_total != null) {
+    return shortNum(w.credits_remaining) + "/" + shortNum(w.limit_total);
+  }
+  if (w.credits_remaining != null) {
+    return shortNum(w.credits_remaining) + " ост.";
+  }
+  if (w.limit_used != null && w.limit_total != null) {
+    return shortNum(w.limit_used) + "/" + shortNum(w.limit_total);
+  }
+  return "—";
 }
 
 function action(icon, label, onclick, danger=false, extraClass="", trailing="", contextmenu="") {
@@ -457,8 +473,9 @@ function escapeAttr(value) {
 render();
 
 setInterval(() => {
-  fetch("/data").then(r => r.json()).then(d => {
-    data = d;
+  fetch("/data?token=" + encodeURIComponent(window.__NG_ACTION_TOKEN__ || "")).then(r => r.json()).then(d => {
+    Object.assign(data, d);
+    window.__NG_ACTION_TOKEN__ = data.action_token || window.__NG_ACTION_TOKEN__ || "";
     render();
   }).catch(() => {});
 }, 2000);
@@ -482,28 +499,39 @@ class _Handler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:  # noqa: N802
         ps = self.server.popover
-        if self.path == "/" or self.path == "/index.html":
+        parsed = urlparse(self.path)
+        path = parsed.path
+        if path == "/" or path == "/index.html":
             body = ps.render_html().encode("utf-8")
             self._respond(200, "text/html; charset=utf-8", body)
-        elif self.path == "/data":
+        elif path == "/data":
+            if not ps.authorize(parsed.query):
+                self._respond(403, "text/plain", b"forbidden")
+                return
             body = ps.render_json().encode("utf-8")
             self._respond(200, "application/json", body)
-        elif self.path.startswith("/action/"):
-            action = self.path[len("/action/") :]
-            ps.handle_action(action)
-            self._respond(200, "text/plain", b"ok")
+        elif path.startswith("/action/"):
+            self._respond(405, "text/plain", b"method not allowed")
         else:
             self._respond(404, "text/plain", b"not found")
 
     def do_POST(self) -> None:  # noqa: N802
         ps = self.server.popover
-        if self.path.startswith("/action/"):
-            action = self.path[len("/action/") :]
+        parsed = urlparse(self.path)
+        path = parsed.path
+        if path.startswith("/action/"):
+            if not ps.authorize(parsed.query):
+                self._respond(403, "text/plain", b"forbidden")
+                return
+            action = unquote(path[len("/action/") :])
             ps.handle_action(action, self._read_json_body())
             self._respond(200, "text/plain", b"ok")
-        elif self.path.startswith("/resize/"):
+        elif path.startswith("/resize/"):
+            if not ps.authorize(parsed.query):
+                self._respond(403, "text/plain", b"forbidden")
+                return
             try:
-                height = int(self.path[len("/resize/") :])
+                height = int(path[len("/resize/") :])
                 ps.handle_resize(height)
             except ValueError:
                 pass
@@ -538,6 +566,7 @@ class PopoverServer:
         self._snapshot: UsageSnapshot | None = None
         self._extra: dict[str, Any] = {}
         self._action_callbacks: dict[str, Callable[[dict[str, Any]], None]] = {}
+        self._action_token = secrets.token_urlsafe(24)
         self._resize_callback: Callable[[int], None] | None = None
         self._server = _PopoverHTTPServer(("127.0.0.1", 0), _Handler)
         self._server.popover = self
@@ -550,7 +579,11 @@ class PopoverServer:
         return self._port
 
     def get_url(self) -> str:
-        return f"http://127.0.0.1:{self._port}/"
+        return f"http://127.0.0.1:{self._port}/?token={self._action_token}"
+
+    def authorize(self, query: str) -> bool:
+        token = parse_qs(query).get("token", [""])[0]
+        return secrets.compare_digest(token, self._action_token)
 
     def update(self, snapshot: UsageSnapshot | None, extra: dict[str, Any]) -> None:
         self._snapshot = snapshot
@@ -602,6 +635,7 @@ class PopoverServer:
             }
         return {
             "snapshot": snap_dict,
+            "action_token": self._action_token,
             **self._extra,
         }
 
@@ -610,6 +644,8 @@ class PopoverServer:
 
     def stop(self) -> None:
         self._server.shutdown()
+        self._server.server_close()
+        self._thread.join(timeout=1)
 
 
 def _relative_time(dt: Any) -> str:

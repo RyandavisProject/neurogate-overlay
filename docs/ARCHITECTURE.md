@@ -67,6 +67,7 @@ run-overlay.ps1
 
 - draws a compact borderless Tkinter widget on Windows;
 - runs a native menu-bar popover on macOS;
+- protects macOS local popover actions with a per-session local token;
 - keeps refresh rate at one minute or slower;
 - is draggable from any area;
 - uses a custom borderless menu instead of the native Windows menu;

@@ -1,6 +1,10 @@
 from datetime import datetime, timezone
+import json
 import threading
 import unittest
+from urllib.error import HTTPError
+from urllib.parse import urlparse
+from urllib.request import Request, urlopen
 
 from neurogate_usage_overlay.models import UsageSnapshot, UsageWindow
 from neurogate_usage_overlay.popover_server import PopoverServer
@@ -53,6 +57,7 @@ class PopoverServerTest(unittest.TestCase):
             self.assertIn("v.2.0 (доступна v.2.1)", html)
             self.assertNotIn("Обновить до", html)
             self.assertIn("106070000", html)
+            self.assertIn('shortNum(w.credits_remaining) + "/" + shortNum(w.limit_total)', html)
             self.assertIn("18 дн осталось", data)
             self.assertIn('"theme": "dark"', data)
             self.assertNotIn("Рћ", html)
@@ -112,6 +117,68 @@ class PopoverServerTest(unittest.TestCase):
             daily_insert = html.index("html += dailyLimitBlock();")
             actions_insert = html.index('html += `<div class="actions">`;')
             self.assertLess(daily_insert, actions_insert)
+        finally:
+            server.stop()
+
+    def test_popover_server_protects_local_actions_with_token(self) -> None:
+        server = PopoverServer()
+        try:
+            server.update(
+                UsageSnapshot(updated_at=datetime.now(timezone.utc)),
+                {
+                    "interval_label": "1 мин",
+                    "daily_limit_enabled": False,
+                    "version_label": "v.2.0 (последняя)",
+                    "version_update_available": False,
+                    "has_account_reset": True,
+                },
+            )
+            parsed = urlparse(server.get_url())
+            base = f"http://127.0.0.1:{server.port}"
+            token_query = parsed.query
+
+            with self.assertRaises(HTTPError) as denied:
+                urlopen(f"{base}/data", timeout=2)
+            self.assertEqual(denied.exception.code, 403)
+
+            payload = json.loads(urlopen(f"{base}/data?{token_query}", timeout=2).read().decode("utf-8"))
+            self.assertIn("action_token", payload)
+
+            with self.assertRaises(HTTPError) as get_action:
+                urlopen(f"{base}/action/refresh?{token_query}", timeout=2)
+            self.assertEqual(get_action.exception.code, 405)
+
+            called = threading.Event()
+            server.on_action("refresh", lambda _payload: called.set())
+            request = Request(f"{base}/action/refresh?{token_query}", data=b"", method="POST")
+            self.assertEqual(urlopen(request, timeout=2).read(), b"ok")
+            self.assertTrue(called.wait(1))
+        finally:
+            server.stop()
+
+    def test_popover_server_passes_http_action_payload_with_token(self) -> None:
+        server = PopoverServer()
+        try:
+            parsed = urlparse(server.get_url())
+            base = f"http://127.0.0.1:{server.port}"
+            token_query = parsed.query
+            event = threading.Event()
+            seen: dict[str, object] = {}
+
+            def callback(payload: dict[str, object]) -> None:
+                seen.update(payload)
+                event.set()
+
+            server.on_action("set_interval", callback)
+            request = Request(
+                f"{base}/action/set_interval?{token_query}",
+                data=json.dumps({"minutes": 5}).encode("utf-8"),
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            self.assertEqual(urlopen(request, timeout=2).read(), b"ok")
+            self.assertTrue(event.wait(1))
+            self.assertEqual(seen, {"minutes": 5})
         finally:
             server.stop()
 

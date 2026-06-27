@@ -25,6 +25,7 @@ $ZipPath = Join-Path $OutputDir "$PackageName.zip"
 $ChecksumPath = "$ZipPath.sha256"
 $SkipDirs = @(".git", ".venv", "__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache", "dist", "build")
 $SkipDirPatterns = @("dist-*")
+$SkipFiles = @("PROJECT_STATE.md", "HANDOFF.md", "security_best_practices_report.md")
 $SkipFilePatterns = @("*.pyc", "*.pyo", "*.pyd", "*.log", "*.trace.zip", "*.har", "*.cookies", "*.local.json")
 
 function Test-SkippedDirectory($Name) {
@@ -40,6 +41,9 @@ function Test-SkippedDirectory($Name) {
 }
 
 function Test-SkippedFile($Name) {
+    if ($SkipFiles -contains $Name) {
+        return $true
+    }
     foreach ($Pattern in $SkipFilePatterns) {
         if ($Name -like $Pattern) {
             return $true

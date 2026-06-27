@@ -1,0 +1,49 @@
+from pathlib import Path
+import unittest
+
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+class ScriptSafetyTest(unittest.TestCase):
+    def test_macos_update_requires_checksum_by_default(self):
+        script = (ROOT / "scripts" / "update-and-restart.sh").read_text(encoding="utf-8")
+
+        self.assertIn("SHA256 checksum is required for ZIP updates", script)
+        self.assertIn("load_sha256_sidecar", script)
+        self.assertIn('$archive_url.sha256', script)
+        self.assertIn("--allow-unverified-zip", script)
+        self.assertNotIn("continuing without archive integrity verification", script)
+
+    def test_macos_app_launcher_embeds_project_root(self):
+        script = (ROOT / "scripts" / "create-desktop-shortcut.sh").read_text(encoding="utf-8")
+
+        self.assertIn("PROJECT_ROOT_QUOTED", script)
+        self.assertIn("ROOT=$PROJECT_ROOT_QUOTED", script)
+        self.assertIn('exec bash "\\$ROOT/scripts/run-overlay.sh"', script)
+        self.assertNotIn('ROOT="$(dirname "$(dirname "$(dirname "$LAUNCH_DIR")")")"', script)
+
+    def test_macos_run_overlay_does_not_kill_by_broad_brand_name(self):
+        script = (ROOT / "scripts" / "run-overlay.sh").read_text(encoding="utf-8")
+
+        self.assertIn("[p]ython.*-m[[:space:]]+neurogate_usage_overlay", script)
+        self.assertNotIn("neurogate_usage_overlay|vibemode", script)
+
+    def test_windows_run_overlay_does_not_kill_by_broad_brand_name(self):
+        script = (ROOT / "scripts" / "run-overlay.ps1").read_text(encoding="utf-8")
+
+        self.assertIn("function Test-OverlayPythonProcess", script)
+        self.assertIn("-m\\s+neurogate_usage_overlay", script)
+        self.assertIn("$CommandLine -match $EscapedRoot", script)
+        self.assertNotIn("neurogate_usage_overlay|vibemode|vibemode", script)
+
+    def test_release_zip_excludes_internal_handoff_files(self):
+        script = (ROOT / "scripts" / "package-release.ps1").read_text(encoding="utf-8")
+
+        self.assertIn('"PROJECT_STATE.md"', script)
+        self.assertIn('"HANDOFF.md"', script)
+        self.assertIn('"security_best_practices_report.md"', script)
+
+
+if __name__ == "__main__":
+    unittest.main()

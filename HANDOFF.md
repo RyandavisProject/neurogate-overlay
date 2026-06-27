@@ -1,132 +1,123 @@
-# HANDOFF - NeuroGate API Overlay
+# HANDOFF - Vibemode Overlay
 
-Updated: 15-06-2026
-Project id: neurogate-overlay
+Updated: 26-06-2026
+Project id: vibemode
 Format: Handoff v2 / short transfer sheet
 
 ## Current Snapshot
 
-Current version: `1.7.2` pushed with audit/performance fixes.
-Current branch: `main`
-GitHub: `https://github.com/RyandavisProject/neurogate-overlay`
-Latest pushed commit: `bf2b984 neurogate-overlay 15-06-2026 22-44 v1.7.2: audit performance hardening`
-Current status: PASS - `v1.7.2` is on GitHub `main`.
+Current local version: `2.2` candidate.
+Current branch: `codex/vibemode-2.0`.
+GitHub: `https://github.com/RyandavisProject/vibemode`.
+Latest pushed commit seen locally: `928d05d vibemode 25-06-2026 23-26 v2.1: restore reset timers`.
+Current status: audit/hardening in progress; local changes are not committed or pushed.
 
 Next safe step:
 
-- Let the owner live-test `v1.7.2`; package ZIP/release only if explicitly requested.
+- Run local checks and ZIP privacy scan, then ask the owner before commit/push/release.
 
 ## Project Goal
 
-NeuroGate API Overlay is a compact Windows overlay for NeuroGate API usage limits.
-It should be easy for a regular Russian-speaking user to install, launch, understand
-and update without giving the project owner any private credentials or data.
+Vibemode Overlay should let a regular Russian-speaking user see Vibemode API limits locally, with simple install/update paths, without sending credentials or private cabinet data anywhere.
 
-The overlay is local-first:
+The app is local-first:
 
 - browser session stays on the user's machine;
 - usage/state files stay under `%USERPROFILE%\.neurogate-usage-overlay`;
-- the public repository contains code, docs and sanitized screenshots only.
+- public repo and ZIP contain only code, docs, scripts, sanitized screenshots, and tests.
 
 ## Read These First
 
 - `PROJECT_STATE.md`
 - `README.md`
 - `CHANGELOG.md`
-- `docs/ARCHITECTURE.md`
+- `SECURITY.md`
 - `docs/PRIVACY.md`
+- `docs/ARCHITECTURE.md`
 - `docs/PUBLISHING.md`
 - `security_best_practices_report.md`
 
-## Latest Important Changes
+## Recent v2.x Context
 
-`v1.7.1`:
+`v2.0`:
 
-- Daily limit no longer carries into the next calendar day.
-- Third row is hidden after day rollover until the user manually sets a new limit.
-- Daily limit dialog again suggests a calculated value:
-  `7d remaining / remaining 7d reset time` with hours/minutes converted to decimal days.
-- Suggested value is only a suggestion; nothing is saved until the user confirms.
-- `Сменить аккаунт` was moved down in the menu above `Закрыть`.
-- Version was updated in code, README and CHANGELOG.
-- Pushed to GitHub `main`.
+- Project moved to the Vibemode cabinet at `https://portal.vibemod.pro/client`.
+- Limits are read primarily from `https://api.vibemod.pro`.
+- Public naming was corrected to Vibemode.
+- Windows and macOS share the same reader/data model.
 
-`v1.7.2` prepared changes:
+`v2.1`:
 
-- Drag performance fix: movement is batched and position is saved after release.
-- Canvas leak fix: render no longer recreates tooltip/daily-limit tag bindings.
-- Browser cache hygiene: safe cache folders are pruned without deleting cookies/session/local storage.
-- Chrome cache caps were added.
-- Reader worker queue is bounded and worker calls have timeout protection.
-- ZIP update now requires SHA256 by default; unverified ZIP update requires explicit local-dev override.
-- `security_best_practices_report.md` was refreshed for the current audit.
-- `PROJECT_STATE.md` and `HANDOFF.md` were refreshed.
+- Reset timers for 5-hour and 7-day rows were restored from the new cabinet text.
 
-`v1.7.0` context that must be preserved:
+`v2.2` local candidate:
 
-- Optional `лимит/день` third row.
-- Double-click on daily-limit row opens editing.
-- Daily progress color scale: blue to 50%, yellow after 50%, orange near 75%, red at 100%+.
-- UI site-reading work moved out of the main UI path to reduce hangs.
-- Watchdog after Windows sleep forces refresh without erasing last good data on temporary failure.
-- Window position should be restored after restart.
-- ZIP updater uses release ZIP asset/checksum logic and safer rollback/allowlist behavior.
+- Daily limit suggestion is capped correctly when less than one day remains before reset.
+- 5-hour and 7-day rows show `remaining/total` again.
+- Daily row formatting matches the upper rows.
+- Windows version row is informational unless an update is available.
+- Windows context menu is clamped on screen.
+- macOS local popover actions require a session token.
+- macOS ZIP updates require SHA256 by default.
+- macOS `.app` shortcut stores the actual project root.
+- macOS and Windows launch scripts avoid broad brand-name process killing.
+- Body text polling uses shorter per-attempt timeout.
+- macOS CI smoke/unit job was added.
+- Release ZIP excludes internal handoff/state/audit report files.
 
-## Verification State
+## Verification
 
-Checked after push and local audit fixes:
-
-- `main` is synchronized with `origin/main`.
-- `bf2b984` is on local `HEAD` and `origin/main`.
-- GitHub repository is public.
-- `powershell -ExecutionPolicy Bypass -File .\scripts\check.ps1`: PASS, `106 tests OK`.
-
-Tooling note:
-
-- `pytest` is not installed in the active Python or `.venv`.
-- Use this canonical check command instead:
+Canonical checks:
 
 ```powershell
+cd C:\Codex\neurogate-usage-overlay
 powershell -ExecutionPolicy Bypass -File .\scripts\check.ps1
+git diff --check
+powershell -ExecutionPolicy Bypass -File .\scripts\package-release.ps1
 ```
 
-Packaging note:
+ZIP privacy scan:
 
-- `dist` currently contains ZIP artifacts through `v1.7.0`.
-- No ZIP has been built for `v1.7.2` yet.
+```powershell
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+$zip='C:\Codex\neurogate-usage-overlay\dist\vibemode-v2.2.zip'
+[IO.Compression.ZipFile]::OpenRead($zip).Entries.FullName |
+  Select-String -Pattern '__pycache__|egg-info|browser-profile|\.venv|\.git/|overlay-debug|overlay-ui|usage-daily|overlay-state|\.env|\.har|\.trace|\.cookies|PROJECT_STATE|HANDOFF|security_best_practices'
+```
 
 ## Owner Preferences
 
-- Speak Russian by default.
-- Keep GitHub README in Russian and visually readable.
-- Link users to the main repo page unless a release link is explicitly requested.
-- Do not create GitHub Releases without explicit approval.
-- Do not push design drift: the overlay is small, compact and sensitive to pixel-level changes.
-- Use version bumps intentionally: patch for fixes, minor for visible feature changes.
+- Russian by default.
+- Dates in docs: `dd-mm-yyyy`.
+- Main public link: `https://github.com/RyandavisProject/vibemode`.
+- Keep UI compact; do not redesign without asking.
+- Version bumps are intentional: patch/minor only when there is a reason.
 - Commit naming pattern:
 
 ```text
-neurogate-overlay dd-mm-yyyy hh-mm vX.Y.Z: short meaning
+vibemode dd-mm-yyyy hh-mm vX.Y: short meaning
 ```
 
 ## Safety Boundaries
 
 Never expose or commit:
 
-- tokens, passwords, API keys;
+- tokens, passwords, API keys, `.env`;
 - local browser profiles;
 - local session state;
-- private NeuroGate data;
-- raw logs with account page content;
-- temporary install/update folders unless sanitized.
+- private Vibemode data;
+- raw cabinet text;
+- raw logs with account content;
+- temporary update/install sandboxes.
 
 Ask before:
 
+- commit;
+- push;
 - force-push;
-- deleting repos/tags/releases;
 - changing repo visibility;
 - creating GitHub Releases;
-- publishing ZIP installers;
+- publishing ZIP assets;
 - changing auth/session/autologin behavior.
 
 ## Next Safe Commands
@@ -138,26 +129,17 @@ cd C:\Codex\neurogate-usage-overlay
 powershell -ExecutionPolicy Bypass -File .\scripts\check.ps1
 ```
 
-Package release if owner asks:
+Package release candidate only when needed:
 
 ```powershell
 cd C:\Codex\neurogate-usage-overlay
 powershell -ExecutionPolicy Bypass -File .\scripts\package-release.ps1
 ```
 
-Before packaging candidate fixes:
-
-```powershell
-cd C:\Codex\neurogate-usage-overlay
-powershell -ExecutionPolicy Bypass -File .\scripts\check.ps1
-```
-
-Then package only if the owner explicitly asks for ZIP/release artifacts.
-
-Verify GitHub state:
+Verify GitHub state without changing it:
 
 ```powershell
 git status --short --branch
 git log --oneline -3 --decorate
-gh repo view RyandavisProject/neurogate-overlay --json name,visibility,url,defaultBranchRef
+gh repo view RyandavisProject/vibemode --json name,visibility,url,defaultBranchRef
 ```

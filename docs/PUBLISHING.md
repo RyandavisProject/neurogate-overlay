@@ -34,6 +34,9 @@ The ZIP is created in `dist/`, for example:
 dist\vibemode-vX.Y.Z.zip
 ```
 
+The release ZIP intentionally excludes internal handoff/state/audit files:
+`PROJECT_STATE.md`, `HANDOFF.md`, and `security_best_practices_report.md`.
+
 ## 3. Review Public Docs
 
 Confirm these files are current:
@@ -87,10 +90,13 @@ After pushing a version commit:
 1. Create a GitHub Release with tag `vX.Y.Z`.
 2. Use the release title `Vibemode vX.Y.Z`.
 3. Attach the generated ZIP from `dist/`.
-4. Mention the main changes from `CHANGELOG.md`.
+4. Attach the generated `.sha256` file next to the ZIP, or make sure the
+   release asset exposes a SHA256 digest.
+5. Mention the main changes from `CHANGELOG.md`.
 
 The in-app update checker reads the latest GitHub Release. Without a Release,
 users will not see update notifications in the overlay menu.
+ZIP updates require SHA256 by default on both Windows and macOS.
 
 Never ask users to send you their password.
 

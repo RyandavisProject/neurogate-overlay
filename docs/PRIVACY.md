@@ -50,7 +50,8 @@ normal Chrome profile.
 - It does not ask for an API key.
 - It does not upload usage data.
 - It does not expose a public web server. On macOS it uses a tiny
-  `127.0.0.1`-only server to render the menu-bar popover locally.
+  `127.0.0.1`-only server to render the menu-bar popover locally. Interactive
+  popover actions require a random local token for the current app session.
 - It does not include analytics.
 - It does not write network traces by default.
 - It does not keep a visible browser window open after successful login unless

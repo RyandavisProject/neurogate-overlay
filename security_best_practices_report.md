@@ -1,154 +1,127 @@
-# Комплексный аудит NeuroGate API Overlay
+# Комплексный аудит Vibemode Overlay
 
-Дата: 15-06-2026
-Объект: локальный Windows-оверлей `neurogate-overlay`
-Режим: defensive senior engineering + QA + security review
-Границы: без DDoS, обхода авторизации, кражи данных, доступа к чужой информации или атакующих проверок
+Дата: 26-06-2026
+Объект: локальный Python-проект `Vibemode Overlay`
+Режим: senior engineering + QA + UI/UX + security review
+Границы: защитный аудит без DDoS, обхода авторизации, кражи данных или доступа к чужой информации
 
-## Короткое резюме
+## Короткий статус
 
-Проект в целом построен безопасно для своего класса: это local-first Windows-приложение, которое не забирает пароль, не отправляет cookies владельцу проекта, хранит сессию в локальном Chrome/Playwright profile и ограничивает собственные логи.
+Проект остаётся local-first: пароль не вводится в интерфейс оверлея, cookies и browser-profile остаются на компьютере пользователя, raw text кабинета не печатается в консоль и не пишется в debug log целиком. Основные риски сейчас не в явной утечке секретов, а в цепочке автообновления, macOS parity, устойчивости запуска после сна/подвисшей страницы и публичной чистоте документации.
 
-Самые важные проблемы были не в прямой утечке данных, а в устойчивости долгой работы: накопление canvas callback-команд, шумное перетаскивание окна, рост browser cache, отсутствие верхней границы у worker queue и мягкая политика checksum для ZIP update. Эти пункты уже исправлены локально в текущем рабочем дереве. Проверка проекта проходит: `powershell -ExecutionPolicy Bypass -File .\scripts\check.ps1` -> `106 tests OK`.
+Текущая локальная ветка содержит незапушенные изменения v2.2. Проверки после правок аудита: `scripts/check.ps1` -> `133 tests OK`, `git diff --check` -> PASS, `scripts/package-release.ps1` -> PASS. ZIP privacy-scan не нашёл browser-profile, локальные state/log/history файлы, `.env`, HAR/trace/cookies, `PROJECT_STATE.md`, `HANDOFF.md` или audit report внутри релизного архива.
 
-## 10 конкретных проблем или рисков
+## 10 проблем и рисков
 
-### 1. Накопление Canvas callback-команд при каждом render
+### 1. macOS ZIP update мог идти без SHA256
 
-- Серьёзность: High.
-- Где: `src/neurogate_usage_overlay/overlay.py:187`, `src/neurogate_usage_overlay/overlay.py:1269`.
-- Почему это проблема: раньше tooltip/daily-limit обработчики навешивались заново при каждом `_render()`. Через час регулярных обновлений Tk мог накопить callback-команды, и события мыши начинали обрабатываться рывками.
-- Как исправить: биндинги должны быть одноразовыми при старте, а render должен менять только canvas-элементы и данные tooltip.
-- Статус: исправлено. Добавлен стабильный тег `tooltip-target`, словарь tooltip-текстов и тест `test_render_does_not_rebind_canvas_tags`.
+- Серьёзность: high.
+- Где: `scripts/update-and-restart.sh`.
+- Почему это проблема: публичное автообновление должно проверять целостность ZIP на обеих платформах одинаково.
+- Как исправлено: macOS updater теперь требует SHA256 по умолчанию, умеет читать `.sha256` sidecar и допускает update без checksum только через явный dev-флаг `--allow-unverified-zip`.
+- Проверки: `tests/test_scripts.py`, `scripts/check.ps1`.
 
-### 2. Перетаскивание окна генерировало слишком много UI-событий
+### 2. macOS `.app` launcher вычислял неправильный корень проекта
 
-- Серьёзность: High.
-- Где: `src/neurogate_usage_overlay/overlay.py:99`, `src/neurogate_usage_overlay/overlay.py:218`.
-- Почему это проблема: частый `geometry()` плюс `<Configure>` создавали шторм событий и сохранений позиции.
-- Как исправить: считать позицию по screen coordinates, применять перемещение с частотой кадра и сохранять координаты только после отпускания мыши.
-- Статус: исправлено. Drag ограничен через `DRAG_FRAME_MS = 16`, сохранение позиции во время drag отключено.
+- Серьёзность: high.
+- Где: `scripts/create-desktop-shortcut.sh`.
+- Почему это проблема: `.app` создаётся в `~/Applications`, а старый launch-скрипт мог искать `scripts/run-overlay.sh` не в папке проекта.
+- Как исправлено: launcher записывает реальный project root при создании `.app`.
+- Проверки: `tests/test_scripts.py`, macOS ручной запуск `Vibemode.app` нужен перед релизом.
 
-### 3. Worker queue могла бесконтрольно ждать или копить команды
+### 3. macOS local popover actions не имели token-защиты
 
-- Серьёзность: High.
-- Где: `src/neurogate_usage_overlay/reader_worker.py:13`, `src/neurogate_usage_overlay/reader_worker.py:67`.
-- Почему это проблема: при зависании Playwright/Chrome вызовы worker могли ждать слишком долго. Это особенно опасно для команд из UI, например переключения режима браузера.
-- Как исправить: ограничить очередь, добавить timeout на worker calls, отменять просроченные future и быстро сообщать ошибку.
-- Статус: исправлено. Добавлены `WORKER_QUEUE_MAXSIZE = 4`, `WORKER_CALL_TIMEOUT_SECONDS = 90`, тесты на timeout и queue full.
+- Серьёзность: medium/high.
+- Где: `src/neurogate_usage_overlay/popover_server.py`, `src/neurogate_usage_overlay/macos_popover.py`.
+- Почему это проблема: локальный `127.0.0.1`-сервер принимал action-запросы без nonce; случайная локальная страница могла бы попытаться вызвать action, если угадает порт.
+- Как исправлено: добавлен per-session token, `/data`, `/action/*` и `/resize/*` требуют token, GET-actions запрещены.
+- Проверки: `tests/test_popover_server.py`, `scripts/check.ps1`.
 
-### 4. Chrome/Playwright profile может расти за счёт cache
+### 4. Windows context menu мог открываться за границей экрана
 
-- Серьёзность: Medium.
-- Где: `src/neurogate_usage_overlay/browser_reader.py:22`, `src/neurogate_usage_overlay/browser_reader.py:134`.
-- Почему это проблема: cookies/session нужны, но `Cache`, `Code Cache`, `GPUCache`, shader-cache и service-worker cache могут расти и влиять на запуск/отзывчивость.
-- Как исправить: чистить только безопасные cache-директории и ограничить disk/media cache Chrome, не трогая `Cookies`, `Local Storage`, `Session Storage`.
-- Статус: исправлено. Текущая runtime-папка около `31.2 MB`; добавлен тест, что cache чистится, а session storage остаётся.
+- Серьёзность: medium.
+- Где: `src/neurogate_usage_overlay/overlay.py`.
+- Почему это проблема: меню могло оказаться у края экрана и стать неудобным для выбора/закрытия.
+- Как исправлено: добавлен clamp позиции popup-меню по размеру экрана.
+- Проверки: `tests/test_overlay.py`.
 
-### 5. Update flow зависит от GitHub Release metadata
+### 5. macOS popover отставал от Windows по отображению `остаток/общий лимит`
 
-- Серьёзность: Medium.
-- Где: `src/neurogate_usage_overlay/update_checker.py:84`, `src/neurogate_usage_overlay/update_checker.py:97`, `src/neurogate_usage_overlay/overlay.py:810`.
-- Почему это проблема: если GitHub API недоступен, release отсутствует или asset не прикреплён, пользователи не увидят корректное обновление.
-- Как исправить: держать graceful fallback, явно документировать, что полноценный auto-update требует GitHub Release asset ZIP + checksum.
-- Статус: частично закрыто. Код безопасно возвращает `None` при сетевых ошибках; нужен дисциплинированный release-процесс.
+- Серьёзность: medium.
+- Где: `src/neurogate_usage_overlay/popover_server.py`.
+- Почему это проблема: Windows v2.2 показывает `114.0M/120M`, а macOS показывал только `106M ост.`, что создаёт разный смысл интерфейса.
+- Как исправлено: HTML popover использует `остаток/общий лимит`, если есть `limit_total`.
+- Проверки: `tests/test_popover_server.py`; визуальный macOS smoke нужен перед релизом.
 
-### 6. ZIP update без checksum может продолжиться с предупреждением
+### 6. Старт и чтение кабинета могли долго ждать подвисшую страницу
 
-- Серьёзность: Medium.
-- Где: `scripts/update-and-restart.ps1:65`, `scripts/update-and-restart.ps1:206`.
-- Почему это проблема: updater умеет SHA256, но если checksum не предоставлен, он продолжает работу. Это удобно для dev, но слабее для публичного канала обновлений.
-- Как исправить: для публичных ZIP-релизов требовать checksum обязательно, а режим без checksum оставить только для локальной разработки через явный флаг.
-- Статус: исправлено. ZIP update без checksum теперь останавливается; обход возможен только явно через `-AllowUnverifiedZip` или `NEUROGATE_ALLOW_UNVERIFIED_UPDATE=1` для локальной разработки.
+- Серьёзность: medium/high.
+- Где: `src/neurogate_usage_overlay/browser_reader.py`.
+- Почему это проблема: `_wait_for_usage_text()` делает до 30 попыток, а `inner_text()` использует общий timeout 45 секунд. При плохом состоянии страницы/после сна это может визуально подвесить запуск или задержать вход.
+- Как исправлено: чтение `body.inner_text()` использует короткий polling-timeout `BODY_TEXT_TIMEOUT_MS = 3000`, общий timeout навигации не менялся.
+- Проверки: `tests/test_browser_reader.py`; ручной сценарий после сна Windows всё ещё нужен.
 
-### 7. PowerShell update/restart запускается из приложения
+### 7. Скрипты запуска имели широкий fallback kill по имени
 
-- Серьёзность: Medium.
-- Где: `src/neurogate_usage_overlay/overlay.py:839`, `scripts/update-and-restart.ps1`.
-- Почему это проблема: запуск внешнего скрипта всегда повышает риск regressions и требует аккуратной проверки аргументов/пути.
-- Как исправить: держать fixed script path внутри repo, не использовать shell interpolation, валидировать URL/checksum и покрывать update flow тестами.
-- Статус: закрыто на текущем уровне. `Popen` использует список аргументов, script path берётся из проекта, а ZIP update теперь требует checksum по умолчанию.
+- Серьёзность: medium.
+- Где: `scripts/run-overlay.sh`, `scripts/run-overlay.ps1`.
+- Почему это проблема: `pgrep -f '...vibemode...'` может теоретически задеть чужой процесс с похожей командной строкой.
+- Как исправлено: fallback сужен до точного `python -m neurogate_usage_overlay` или алиаса внутри папки проекта; Chrome остаётся по собственному profile path.
+- Проверки: `tests/test_scripts.py`, ручной macOS restart/update ещё нужен.
 
-### 8. Парсер зависит от текста и DOM сайта NeuroGate
+### 8. Daily-limit parity на macOS неполный
 
-- Серьёзность: Medium.
-- Где: `src/neurogate_usage_overlay/parser.py`, `src/neurogate_usage_overlay/browser_reader.py:441`, `src/neurogate_usage_overlay/browser_reader.py:506`.
-- Почему это проблема: любое изменение сайта может сломать лимиты, прогресс-бары или статус входа.
-- Как исправить: хранить больше fixture-примеров страниц, добавить contract tests на новые версии страницы, разделить DOM-adapter и domain parser.
-- Статус: частично закрыто тестами на текущий и старый формат; нужен расширенный набор fixtures при каждом изменении сайта.
+- Серьёзность: medium.
+- Где: `src/neurogate_usage_overlay/overlay.py`, `src/neurogate_usage_overlay/popover_server.py`.
+- Почему это проблема: Windows имеет компактную третью строку `лимит/день`; macOS сейчас больше завязан на карточки/actions и требует отдельного визуального smoke.
+- Как исправить: добавить явную daily-limit карточку с теми же spent/limit/percent правилами и цветовой шкалой, либо честно задокументировать отличие.
+- Проверки: `tests/test_popover_server.py`, macOS screenshot/manual QA.
 
-### 9. UI-состояние и runtime diagnostics пока ограничены
+### 9. CI не проверял macOS путь
 
-- Серьёзность: Low/Medium.
-- Где: `src/neurogate_usage_overlay/overlay.py`, `src/neurogate_usage_overlay/log_utils.py:10`.
-- Почему это проблема: при жалобах “через час тормозит” сейчас сложно быстро увидеть число renders, длительность refresh, размер profile/cache, очередь worker и активные таймеры.
-- Как исправить: добавить лёгкий diagnostic snapshot в bounded log: render count, refresh duration, worker queue size, browser profile/cache size.
-- Статус: открыто как полезное улучшение.
+- Серьёзность: medium.
+- Где: `.github/workflows/ci.yml`.
+- Почему это проблема: macOS UI и shell scripts уже часть продукта, но GitHub Actions гоняет только Windows.
+- Как исправлено: добавлен `macos-latest` job с Python 3.12, установкой `.[macos]`, compile и macOS-safe unit tests.
+- Проверки: локально проверена YAML-правка и общий `scripts/check.ps1`; зелёный GitHub Actions на macOS можно подтвердить только после push.
 
-### 10. Нет автоматического UI-smoke на реальном окне
+### 10. В корне были устаревшие project-state/handoff/report файлы со старым брендом
 
-- Серьёзность: Low/Medium.
-- Где: `tests/test_overlay.py`, ручная проверка UI.
-- Почему это проблема: unit tests хорошо ловят логику, но не подтверждают реальную плавность drag, overlay geometry, tooltip и menu после часа работы.
-- Как исправить: добавить ручной/полуавтоматический long-run smoke: запустить overlay с fake reader на 60-90 минут, собрать CPU/memory/profile-size и проверить drag.
-- Статус: открыто; нужен длительный локальный прогон на Windows.
+- Серьёзность: low/medium.
+- Где: `PROJECT_STATE.md`, `HANDOFF.md`, старый `security_best_practices_report.md`.
+- Почему это проблема: публичный репозиторий может показывать пользователям старые NeuroGate-ссылки и старые release-правила.
+- Как исправлено: `PROJECT_STATE.md` и `HANDOFF.md` обновлены под Vibemode/v2.2, `security_best_practices_report.md` заменён текущим аудитом, а `scripts/package-release.ps1` исключает эти внутренние файлы из ZIP.
+- Проверки: `tests/test_scripts.py`, `scripts/package-release.ps1`, ZIP privacy-scan.
 
 ## Быстрые исправления на 1-2 часа
 
-- Закрепить в README/CHANGELOG новую проверку: `106 tests OK`.
-- Добавить короткий раздел “Производительность и локальные файлы”: какие файлы растут, какие ограничены, что чистится.
-- Сделать release checklist: ZIP asset + `.sha256` обязательны для публичного обновления.
-- Добавить diagnostic log строки для refresh duration и worker queue size.
-- Собрать `v1.7.2` ZIP и checksum после финального теста.
+- Сделано: обновлены `PROJECT_STATE.md` и `HANDOFF.md`, внутренние файлы исключены из публичного ZIP.
+- Сделано: добавлен macOS CI job.
+- Сделано: прогнан `scripts/package-release.ps1`, создан `dist\vibemode-v2.2.zip` и `.sha256`.
 
 ## Глубокие архитектурные улучшения
 
-- Поддерживать update integrity policy в строгом режиме: публичный ZIP без checksum не устанавливать.
-- Добавить long-run performance harness для fake overlay без реального NeuroGate.
-- Разделить browser DOM adapter и parser fixtures, чтобы легче переживать изменения сайта.
-- Добавить IPC/named pipe вместо любых fallback-поисков процессов.
-- Ввести лёгкую telemetry-only-local diagnostics page/file без приватных данных.
+- Вынести чтение Vibemode API в отдельный adapter с contract fixtures.
+- Добавить long-run performance harness на 60-90 минут для drag/refresh/profile-size.
+- Сделать единый renderer model для Windows/macOS, чтобы parity не расходился.
+- Добавить подписанные release artifacts или установщик с подписью для Windows/macOS.
+- Добавить локальный diagnostics snapshot без приватных данных: длительность refresh, worker queue, размер profile/cache.
 
 ## Что нельзя проверить без доступа
 
-- Реальную консоль браузера и network waterfall страницы NeuroGate: нужен живой логин пользователя в ЛК.
-- Реальные API-ответы NeuroGate: приложение читает UI, не имеет официального API token.
-- Поведение на других тарифах и аккаунтах: нужны fixtures или тестовый аккаунт с другим тарифом.
-- Долгий UX через 1-2 часа: нужен локальный long-run на Windows с открытым overlay.
-- GitHub Releases end-to-end: нужен созданный release с ZIP asset и `.sha256`.
+- Реальный вход и смену аккаунта в Vibemode ЛК.
+- Консоль/Network кабинета на живой сессии.
+- Поведение после сна Windows на реальном компьютере владельца.
+- Визуальный macOS popover и запуск `.app` на macOS.
+- End-to-end GitHub Release update с настоящим ZIP asset и `.sha256`.
 
 ## GOAL
 
-Цель: устранить найденные проблемы NeuroGate API Overlay так, чтобы:
+Устранить найденные проблемы так, чтобы Vibemode Overlay был готов к стабильному публичному релизу:
 
-- не было накопления UI callback-команд при повторном render;
-- drag не блокировал UI и не писал state на каждом движении мыши;
-- worker queue не могла бесконтрольно расти или ждать бесконечно;
-- Chrome profile cache чистился безопасно без потери сессии;
-- логи и daily usage оставались bounded;
-- update flow требовал checksum для публичных ZIP-обновлений;
-- штатная проверка `scripts/check.ps1` проходила без регрессий.
-
-Критерий завершения текущего аудита: все критичные пункты 1-4 исправлены кодом и тестами, checksum policy усилена, отчёт обновлён, `scripts/check.ps1` проходит.
-
-Критерий принятия перед релизом: владелец перезапускает оверлей и подтверждает live-проверку drag после длительной работы.
-
-## План исправления
-
-1. Закрыть UI callback leak и drag event storm.
-2. Закрыть worker queue/timeout риск.
-3. Ограничить рост Chrome cache без удаления сессии.
-4. Усилить ZIP update checksum policy.
-5. Обновить security/performance audit report.
-6. Прогнать `scripts/check.ps1`.
-7. После live-проверки владельцем обновить версию, README/CHANGELOG, собрать ZIP и сделать commit/push.
-
-## Уже выполнено в текущем рабочем дереве
-
-- Исправлен drag batching и сохранение позиции только после отпускания мыши.
-- Убрано повторное создание tooltip/daily-limit canvas bindings в `_render()`.
-- Добавлена безопасная очистка browser cache и Chrome cache size limits.
-- Добавлены timeout и max queue size для `ThreadedUsageReader`.
-- ZIP update без SHA256 теперь запрещён по умолчанию.
-- Добавлены regression tests.
-- Проверка: `106 tests OK`.
+- critical/high пункты 1-3 исправлены и покрыты тестами;
+- medium пункты 4-8 либо исправлены, либо явно переведены в release checklist с ручной проверкой;
+- `scripts/check.ps1` и `git diff --check` проходят;
+- при изменении релизных архивов проходит `scripts/package-release.ps1`;
+- README, CHANGELOG, SECURITY/PRIVACY/ARCHITECTURE/PUBLISHING отражают фактическое поведение;
+- владелец подтверждает ручные сценарии: вход, смена аккаунта, сон/пробуждение, drag, меню, update notice.

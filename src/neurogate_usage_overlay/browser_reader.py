@@ -24,6 +24,7 @@ HIDDEN_WINDOW_ARGS = ("--window-position=-32000,-32000", "--window-size=1440,950
 LOGIN_CONFIRM_ATTEMPTS = 10
 LOGIN_PROMPT_CONFIRM_ATTEMPTS = 3
 AUTO_LOGIN_DELAY_ATTEMPTS = 3
+BODY_TEXT_TIMEOUT_MS = 3_000
 PROFILE_CACHE_DIRS = (
     "GrShaderCache",
     "ShaderCache",
@@ -769,7 +770,7 @@ class NeurogateUsageReader:
         stale_attempts = 0
         for _attempt in range(30):
             self._page.wait_for_timeout(500)
-            last_text = self._page.locator("body").inner_text(timeout=self.settings.timeout_ms)
+            last_text = self._page.locator("body").inner_text(timeout=BODY_TEXT_TIMEOUT_MS)
             if self._is_session_invalid_text(last_text):
                 stale_text = last_text
                 stale_attempts += 1

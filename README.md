@@ -1,4 +1,4 @@
-# Vibemode 2.4
+# Vibemode Overlay 2.4
 
 Компактный desktop-overlay для лимитов Vibemode API. Работает локально на **Windows** и **macOS**, читает данные из кабинета Vibemode через локальную браузерную сессию Chrome/Playwright и показывает остатки, прогресс и время до сброса лимитов.
 
@@ -14,8 +14,8 @@
 
 <table>
   <tr>
-    <td><img src="docs/screenshots/overlay-tooltip.png" alt="Windows оверлей Vibemode 2.4" /></td>
-    <td><img src="docs/screenshots/overlay-menu.png" alt="Windows меню Vibemode 2.4" /></td>
+    <td><img src="docs/screenshots/overlay-tooltip.png" alt="Windows оверлей Vibemode Overlay 2.4" /></td>
+    <td><img src="docs/screenshots/overlay-menu.png" alt="Windows меню Vibemode Overlay 2.4" /></td>
   </tr>
   <tr>
     <td align="center">Windows overlay</td>

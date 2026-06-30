@@ -949,6 +949,9 @@ class OverlayAccountTest(unittest.TestCase):
 
 
 class OverlayUpdateTest(unittest.TestCase):
+    def test_update_check_interval_is_short_enough_for_open_overlay(self):
+        self.assertLessEqual(UsageOverlay.UPDATE_CHECK_SECONDS, 3 * 60 * 60)
+
     def test_display_version_drops_patch_zero(self):
         self.assertEqual(display_version("2.0"), "v.2.0")
         self.assertEqual(display_version("v2.1.0"), "v.2.1")

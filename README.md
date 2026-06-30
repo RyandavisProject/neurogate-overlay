@@ -43,11 +43,22 @@
 
 ## Установка
 
-### Windows
+### Windows: из Git
 
 ```powershell
 git clone https://github.com/RyandavisProject/vibemode.git
 cd vibemode
+powershell -ExecutionPolicy Bypass -File .\scripts\install.ps1
+```
+
+### Windows: из ZIP-архива
+
+1. Открой [Releases](https://github.com/RyandavisProject/vibemode/releases).
+2. Скачай `vibemode-v2.4.zip` из последнего релиза.
+3. Распакуй архив, например в `C:\Vibemode`.
+4. Запусти:
+
+```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\install.ps1
 ```
 
@@ -57,11 +68,21 @@ powershell -ExecutionPolicy Bypass -File .\scripts\install.ps1
 powershell -ExecutionPolicy Bypass -File .\scripts\run-overlay.ps1
 ```
 
-### macOS
+### macOS: из Git
 
 ```bash
 git clone https://github.com/RyandavisProject/vibemode.git
 cd vibemode
+bash scripts/install.sh
+```
+
+### macOS: из ZIP-архива
+
+1. Открой [Releases](https://github.com/RyandavisProject/vibemode/releases).
+2. Скачай `vibemode-v2.4.zip` из последнего релиза.
+3. Распакуй архив и в папке проекта запусти:
+
+```bash
 bash scripts/install.sh
 ```
 
